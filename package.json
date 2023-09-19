@@ -24,7 +24,8 @@
     "@src": "dist"
   },
   "engines": {
-    "node": ">=8.10.0"
+    "node": "20.6.1",
+    "npm": "10.1.0"
   },
   "dependencies": {
     "@types/bcrypt": "^5.0.0",
