@@ -23,10 +23,6 @@
   "_moduleAliases": {
     "@src": "dist"
   },
-  "engines": {
-    "node": "20.6.1",
-    "npm": "10.1.0"
-  },
   "dependencies": {
     "@types/bcrypt": "^5.0.0",
     "@types/cors": "^2.8.14",
