@@ -1,7 +1,7 @@
 import { createNewUser, getUserByEmail } from "@src/controllers/user";
 import User from "@src/interfaces/interfaces";
 import { Router } from "express";
-import bcrypt, { hash } from 'bcrypt';
+import bcrypt from 'bcrypt';
 import HttpStatusCodes from "@src/constants/HttpStatusCodes";
 import { invalidatedTokens, issueUserJWTToken } from "@src/helpers/auth";
 import { authenticateToken } from "@src/middlewares/auth";
