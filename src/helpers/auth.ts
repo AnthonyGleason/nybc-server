@@ -1,4 +1,4 @@
-import User from '@src/interfaces/interfaces';
+import {User} from '@src/interfaces/interfaces';
 import jwt from 'jsonwebtoken'
 
 //issue jwt login tokens
@@ -21,7 +21,7 @@ export const issueCartJWTToken = function(cart:any){
   },
     process.env.SECRET as jwt.Secret,
   {
-    expiresIn: '1D',
+    expiresIn: '1H',
   });
 };
 

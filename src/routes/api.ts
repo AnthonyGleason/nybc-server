@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import sessionsRouter from './sessions';
 import usersRouter from './users';
+import { shopRouter } from './shop';
 
 const apiRouter = Router();
 
@@ -10,7 +11,7 @@ apiRouter.get('/',(req,res,next)=>{
 
 apiRouter.use('/sessions',sessionsRouter);
 apiRouter.use('/users',usersRouter);
-
+apiRouter.use('/shop',shopRouter);
 
 // **** Export default **** //
 

@@ -1,4 +1,4 @@
-import User from "@src/interfaces/interfaces";
+import {User} from "@src/interfaces/interfaces";
 import { UserModel } from "../models/User";
 
 //get a user by userID

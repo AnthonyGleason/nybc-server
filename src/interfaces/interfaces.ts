@@ -1,11 +1,16 @@
 //user
-export default interface User{
+export interface User{
   firstName:string,
   lastName:string,
   email:string,
   hashedPassword:string,
   group?:string
-}
-//cart
+};
+
+//item
+export interface Item{
+  price: number,
+  name: string,
+  quantity?: number,
+};
 //order
-//shopItem

@@ -1,0 +1,12 @@
+//create an account
+POST http://localhost:5000/v1/api/vaults/register/
+Content-Type: application/json
+
+{
+  "firstName": "b",
+  "lastName": "b",
+  "email": "b@b.com",
+  "masterPassword": "hello_world!"
+}
+
+###
