@@ -1,6 +1,6 @@
 import Cart from '@src/classes/Cart';
 import HttpStatusCodes from '@src/constants/HttpStatusCodes';
-import { getItemByID, getItemByName } from '@src/controllers/item';
+import { getAllItems, getItemByID, getItemByIdentifier, getItemByName } from '@src/controllers/item';
 import { invalidatedTokens, issueCartJWTToken } from '@src/helpers/auth';
 import { authenticateToken } from '@src/middlewares/auth';
 import {Router} from 'express'
@@ -27,32 +27,25 @@ shopRouter.post('/carts',(req,res,next)=>{
   res.status(HttpStatusCodes.OK).json({cartToken:token});
 });
 
-//gets current cart based on provided bearer token
+//get the user's current cart based on provided bearer token
 shopRouter.get('/carts',authenticateToken,(req:any,res,next)=>{
   res.status(HttpStatusCodes.OK).json({cart: req.payload.cart});
 });
 
 //update a cart based on the provided bearer token
 shopRouter.put('/carts',authenticateToken, async (req:any,res,next)=>{
-  const {
-    itemName,
-    quantity
-  }:{
-    itemName:string,
-    quantity:number
-  } = req.body;
+  const itemID:string = req.body.itemID;
+  let updatedQuantity:number = req.body.updatedQuantity;
   //handle invalid quantity
-  if (quantity<0){
-    res.status(HttpStatusCodes.BAD_REQUEST).json({message: 'You cannot have a quantity of less than 0.'});
-  }else{
+  if (updatedQuantity<0) updatedQuantity=0;
     //get cart
     let cart:Cart = new Cart(req.payload.cart.items);
     try{
       //get item data from mongoDB
-      const itemDoc: Item | null = await getItemByName(itemName);
+      const itemDoc:Item | null = await getItemByID(itemID);
       if (itemDoc){
         //handle modify cart
-        cart.handleModifyCart(itemDoc,quantity);
+        cart.handleModifyCart(itemDoc, updatedQuantity);
         //invalidate old token
         invalidatedTokens.push(req.token);
         //sign a new token for the user
@@ -67,9 +60,40 @@ shopRouter.put('/carts',authenticateToken, async (req:any,res,next)=>{
       console.log(err);
       res.status(HttpStatusCodes.NOT_FOUND).json({message: 'The requested item was not found.'});
     };
+});
+
+//get all shop items
+shopRouter.get('/all', async (req,res,next)=>{
+  try{
+    const allItems:Item[] | null = await getAllItems();
+    if (allItems){
+      res.status(HttpStatusCodes.OK).json({allItems:allItems});
+    }else{
+      res.status(HttpStatusCodes.NOT_FOUND).json({allItems: []});
+    };
+  }catch(err){
+    console.log(err);
+    res.status(HttpStatusCodes.INTERNAL_SERVER_ERROR)
+      .json({message: 'An error has occured when fetching item data!',allItems: []});
   };
 });
 
+//get shop item by item id
+shopRouter.get('/item/:itemID', async (req,res,next)=>{
+  const itemID = req.params.itemID;
+  try{
+    const item:Item | null = await getItemByID(itemID);
+    if (item){
+      res.status(HttpStatusCodes.OK).json({item: item});
+    }else{
+      res.status(HttpStatusCodes.NOT_FOUND);
+    };
+  }catch(err){
+    console.log(err);
+    res.status(HttpStatusCodes.INTERNAL_SERVER_ERROR)
+      .json({message: 'An error has occured when fetching item data!',allItems: []});
+  };
+});
 
 //get the order data for provided order id
 shopRouter.get('/orders',authenticateToken,(req,res,next)=>{
