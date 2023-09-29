@@ -12,6 +12,7 @@ export interface Item{
   price: number,
   name: string,
   quantity: number,
-  _id: string // unique id given by mongodb
+  _id: string, // unique id given by mongodb
+  index:number
 };
 //order
