@@ -10,10 +10,15 @@ export default class Cart{
   handleModifyCart = (itemDoc: Item, updatedQuantity: number): void => {
     const itemIndex: number | undefined = this.getIndexOfItemByName(itemDoc.name);
     if (itemIndex === undefined && updatedQuantity>0) {
-      let updatedItemDoc:Item = itemDoc;
-      updatedItemDoc.quantity=updatedQuantity;
       // Item is not in the user's cart; add it with the given quantity
-      this.items.push(updatedItemDoc);
+      //creating a new updated item and updating the properties of that does not work it gives NaN error on quantity
+      this.items.push({
+        name: itemDoc.name,
+        price: itemDoc.price,
+        quantity: updatedQuantity,
+        _id: itemDoc._id,
+        index: itemDoc.index
+      });
     }else if (itemIndex!==undefined){
       // Item already exists in the user's cart, update the quantity
       const item = this.items[itemIndex];
