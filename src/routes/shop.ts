@@ -5,12 +5,28 @@ import { invalidatedTokens, issueCartJWTToken } from '@src/helpers/auth';
 import { authenticateToken } from '@src/middlewares/auth';
 import {Router} from 'express'
 import {Item} from '../interfaces/interfaces';
+import { stripe } from '@src/util/stripe';
 
 export const shopRouter = Router();
 
 //check out a cart
 shopRouter.post('/carts/checkout',(req,res,next)=>{
 
+});
+
+shopRouter.post('/carts/create-payment-intent',authenticateToken,async (req:any,res,next)=>{
+  const items:Item[] = req.payload.cart.items;
+  let totalAmount:number = 0; //IN CENTS!!!
+  items.forEach((item:Item)=>{
+    totalAmount+=item.price*100; //CONVERT TO CENTS BY MULTIPLYING 100!!!!
+  });
+
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount: totalAmount,
+    currency: 'usd', // Change this to your preferred currency
+  });
+
+  res.json({ paymentIntentToken: paymentIntent.client_secret });
 });
 
 //verify a cart token

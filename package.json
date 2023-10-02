@@ -44,6 +44,7 @@
     "module-alias": "^2.2.3",
     "mongoose": "^7.5.2",
     "morgan": "^1.10.0",
+    "stripe": "^13.8.0",
     "ts-command-line-args": "^2.5.1"
   },
   "devDependencies": {
