@@ -1,10 +1,12 @@
 import { createNewUser, getUserByEmail } from "@src/controllers/user";
-import {User} from "@src/interfaces/interfaces";
+import {Membership, User} from "@src/interfaces/interfaces";
 import { Router } from "express";
 import bcrypt from 'bcrypt';
 import HttpStatusCodes from "@src/constants/HttpStatusCodes";
 import { invalidatedTokens, issueUserJWTToken } from "@src/helpers/auth";
 import { authenticateToken } from "@src/middlewares/auth";
+import { createMembership, getMembershipByUserID } from "@src/controllers/membership";
+
 const usersRouter = Router();
 
 //register a new user
@@ -17,6 +19,7 @@ usersRouter.post('/register', async(req,res,next)=>{
     password,
     passwordConfirm
   } = req.body;
+
   //generate the hashed password
   const salt:number = 15;
   const hashedPassword:string = await bcrypt.hash(password,salt);
@@ -36,6 +39,7 @@ usersRouter.post('/register', async(req,res,next)=>{
     console.log(err);
     res.status(HttpStatusCodes.BAD_REQUEST).json({message: err});
   }
+
   //verify the email is not taken by another user
   try{
     if (await getUserByEmail(email)) throw new Error('An account with that email already exists.');
@@ -47,9 +51,23 @@ usersRouter.post('/register', async(req,res,next)=>{
   //attempt to create a new user
   try{
     //create the user document
-    const UserDoc:User = await createNewUser(firstName,lastName,email,hashedPassword);
+    const UserDoc:User = await createNewUser(
+      firstName,
+      lastName,
+      email,
+      hashedPassword,
+      new Date(),
+      false,
+    );
     //user does not exist
     if (!UserDoc) throw new Error('An error occured when creating a user, please try again later.');
+    //create a membership document for the new user
+    try{
+      await createMembership(UserDoc._id.toString());
+    }catch(err){
+      console.log(err);
+      res.status(HttpStatusCodes.INTERNAL_SERVER_ERROR);
+    };
     //sign a jwt token for the user so they dont have to sign in again
     const token:string = issueUserJWTToken(UserDoc);
     res.status(HttpStatusCodes.OK).json({token: token});
@@ -99,6 +117,19 @@ usersRouter.post('/logout', authenticateToken,(req:any,res,next)=>{
 
 usersRouter.get('/verify', authenticateToken,(req,res,next)=>{
   res.status(HttpStatusCodes.OK).json({isValid: true});
+});
+
+usersRouter.get('/membershipLevel', authenticateToken, async (req:any,res,next)=>{
+  //get userID
+  const userID:string = req.payload.user._id;
+  //get membership level
+  const membershipDoc:Membership | null = await getMembershipByUserID(userID);
+  //return it to the client if it exists
+  if (membershipDoc){
+    res.status(HttpStatusCodes.OK).json({membershipLevel: membershipDoc.tier});
+  }else{
+    res.status(HttpStatusCodes.NOT_FOUND).json({message: 'Membership information not found.'});
+  }
 });
 
 export default usersRouter;

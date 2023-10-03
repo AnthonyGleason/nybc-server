@@ -1,4 +1,4 @@
-import {User} from "@src/interfaces/interfaces";
+import { Membership, User } from "@src/interfaces/interfaces";
 import { UserModel } from "../models/User";
 
 //get a user by userID
@@ -22,17 +22,20 @@ export const createNewUser = async function(
   lastName:string,
   email:string,
   hashedPassword:string,
+  dateCreated:Date,
+  frozen:boolean,
   group?:string
 ):Promise<User>{
-  const userData:User = {
+
+  const userData = {
     firstName,
     lastName,
     email,
     hashedPassword,
+    dateCreated,
+    frozen,
+    group: group || undefined
   };
-
-  //a user group was provided to the function such as 'admin' or 'employee'
-  if (group) userData.group = group
   
   return await UserModel.create(userData);
 };
