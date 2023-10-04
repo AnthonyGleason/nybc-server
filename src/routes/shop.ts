@@ -16,11 +16,40 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
   const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
 
   let totalAmount:number = 0; //IN CENTS!!!
-  
-  //grab the items from mongodb and calculate the price of each item based on the membership level
+  //grab the items from mongodb and verify the pricing of each item
+  let verifiedItems:Item[] = items;
+
+  items.forEach(async (item:Item)=>{
+    let verifiedItem:Item = item;
+    const itemDoc:Item | null = await getItemByID(item._id);
+    //break look if itemDoc is not found
+    if (!itemDoc) return;
+    verifiedItem.price=itemDoc.price;
+    verifiedItems.push(verifiedItem);
+  });
+  //apply the membership discount pricing to the cart
   if (membershipDoc){
+    const membershipTier:string = membershipDoc.tier;
     //apply membership pricing in switch statement
-    items.forEach((item:Item)=>{
+    verifiedItems.forEach((item:Item)=>{
+      let discountPercent = 1;
+      switch(membershipTier){
+        case 'Gold Member':
+          discountPercent = 0.05;
+          break;
+        case 'Platinum Member':
+          discountPercent = 0.10;
+          break;
+        case 'Diamond Member':
+          discountPercent = 0.15;
+          break;
+        default: //user is a non-member
+          discountPercent = 1;
+          break;
+      }
+      //update the item
+      item.price=item.price*discountPercent;
+      //apply the discount to the total amount 
       totalAmount+=Math.ceil(item.price*100); //CONVERT TO CENTS BY MULTIPLYING 100!!!!
     });
   }else{
@@ -29,7 +58,8 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
       totalAmount+=Math.ceil(item.price*100); //CONVERT TO CENTS BY MULTIPLYING 100!!!!
     });
   };
-  
+  console.log(verifiedItems);
+  //create payment intent
   const paymentIntent = await stripe.paymentIntents.create({
     amount: totalAmount,
     currency: 'usd', // Change this to your preferred currency
@@ -58,9 +88,13 @@ shopRouter.get('/carts',authenticateCartToken,(req:any,res,next)=>{
 });
 
 //update a cart based on the provided bearer token
-shopRouter.put('/carts',authenticateCartToken, async (req:any,res,next)=>{
+shopRouter.put('/carts',authenticateCartToken, authenticateLoginToken, async (req:any,res,next)=>{
   const itemID:string = req.body.itemID;
   let updatedQuantity:number = req.body.updatedQuantity;
+  //get membership tier for user
+  const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
+  let membershipTier:string = 'Non-Member';
+  if (membershipDoc) membershipTier = membershipDoc.tier;
   //handle invalid quantity
   if (updatedQuantity<0) updatedQuantity=0;
     //get cart
@@ -70,7 +104,7 @@ shopRouter.put('/carts',authenticateCartToken, async (req:any,res,next)=>{
       const itemDoc:Item | null = await getItemByID(itemID);
       if (itemDoc){
         //handle modify cart
-        cart.handleModifyCart(itemDoc, updatedQuantity);
+        cart.handleModifyCart(itemDoc, updatedQuantity,membershipTier);
         //invalidate old token
         invalidatedTokens.push(req.tokens.cartToken);
         //sign a new token for the user
