@@ -2,20 +2,34 @@ import Cart from '@src/classes/Cart';
 import HttpStatusCodes from '@src/constants/HttpStatusCodes';
 import { getAllItems, getItemByID, getItemByIdentifier, getItemByName } from '@src/controllers/item';
 import { invalidatedTokens, issueCartJWTToken } from '@src/helpers/auth';
-import { authenticateToken } from '@src/middlewares/auth';
 import {Router} from 'express'
-import {Item} from '../interfaces/interfaces';
+import {Item, Membership} from '../interfaces/interfaces';
 import { stripe } from '@src/util/stripe';
+import { authenticateCartToken, authenticateLoginToken } from '@src/middlewares/auth';
+import { getMembershipByUserID } from '@src/controllers/membership';
 
 export const shopRouter = Router();
 
-shopRouter.post('/carts/create-payment-intent',authenticateToken,async (req:any,res,next)=>{
-  const items:Item[] = req.payload.cart.items;
-  let totalAmount:number = 0; //IN CENTS!!!
-  items.forEach((item:Item)=>{
-    totalAmount+=Math.ceil(item.price*100); //CONVERT TO CENTS BY MULTIPLYING 100!!!!
-  });
+shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticateLoginToken,async (req:any,res,next)=>{
+  const items:Item[] = req.payload.cartPayload.cart.items;
+  //get membership level for user
+  const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
 
+  let totalAmount:number = 0; //IN CENTS!!!
+  
+  //grab the items from mongodb and calculate the price of each item based on the membership level
+  if (membershipDoc){
+    //apply membership pricing in switch statement
+    items.forEach((item:Item)=>{
+      totalAmount+=Math.ceil(item.price*100); //CONVERT TO CENTS BY MULTIPLYING 100!!!!
+    });
+  }else{
+    //apply non member pricing a membership document was not found.
+    items.forEach((item:Item)=>{
+      totalAmount+=Math.ceil(item.price*100); //CONVERT TO CENTS BY MULTIPLYING 100!!!!
+    });
+  };
+  
   const paymentIntent = await stripe.paymentIntents.create({
     amount: totalAmount,
     currency: 'usd', // Change this to your preferred currency
@@ -25,8 +39,8 @@ shopRouter.post('/carts/create-payment-intent',authenticateToken,async (req:any,
 });
 
 //verify a cart token
-shopRouter.get('/carts/verify',authenticateToken,(req:any,res,next)=>{
-  res.status(HttpStatusCodes.OK).json({isValid: true,cart: req.payload.cart});
+shopRouter.get('/carts/verify',authenticateCartToken,(req:any,res,next)=>{
+  res.status(HttpStatusCodes.OK).json({isValid: true,cart: req.payload.cartPayload.cart});
 });
 
 //create a cart and return the jwt token of the cart to the user
@@ -39,18 +53,18 @@ shopRouter.post('/carts',(req,res,next)=>{
 });
 
 //get the user's current cart based on provided bearer token
-shopRouter.get('/carts',authenticateToken,(req:any,res,next)=>{
-  res.status(HttpStatusCodes.OK).json({cart: req.payload.cart});
+shopRouter.get('/carts',authenticateCartToken,(req:any,res,next)=>{
+  res.status(HttpStatusCodes.OK).json({cart: req.payload.cartPayload.cart});
 });
 
 //update a cart based on the provided bearer token
-shopRouter.put('/carts',authenticateToken, async (req:any,res,next)=>{
+shopRouter.put('/carts',authenticateCartToken, async (req:any,res,next)=>{
   const itemID:string = req.body.itemID;
   let updatedQuantity:number = req.body.updatedQuantity;
   //handle invalid quantity
   if (updatedQuantity<0) updatedQuantity=0;
     //get cart
-    let cart:Cart = new Cart(req.payload.cart.items);
+    let cart:Cart = new Cart(req.payload.cartPayload.cart.items);
     try{
       //get item data from mongoDB
       const itemDoc:Item | null = await getItemByID(itemID);
@@ -58,7 +72,7 @@ shopRouter.put('/carts',authenticateToken, async (req:any,res,next)=>{
         //handle modify cart
         cart.handleModifyCart(itemDoc, updatedQuantity);
         //invalidate old token
-        invalidatedTokens.push(req.token);
+        invalidatedTokens.push(req.tokens.cartToken);
         //sign a new token for the user
         const token:string = issueCartJWTToken(cart);
         //send it to the client
@@ -107,6 +121,6 @@ shopRouter.get('/item/:itemID', async (req,res,next)=>{
 });
 
 //get the order data for provided order id
-shopRouter.get('/orders',authenticateToken,(req,res,next)=>{
+shopRouter.get('/orders',(req,res,next)=>{
 
 });

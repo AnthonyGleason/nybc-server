@@ -4,8 +4,8 @@ import { Router } from "express";
 import bcrypt from 'bcrypt';
 import HttpStatusCodes from "@src/constants/HttpStatusCodes";
 import { invalidatedTokens, issueUserJWTToken } from "@src/helpers/auth";
-import { authenticateToken } from "@src/middlewares/auth";
 import { createMembership, getMembershipByUserID } from "@src/controllers/membership";
+import { authenticateLoginToken } from "@src/middlewares/auth";
 
 const usersRouter = Router();
 
@@ -108,20 +108,20 @@ usersRouter.post('/login', async (req,res,next)=>{
   };
 });
 
-usersRouter.post('/logout', authenticateToken,(req:any,res,next)=>{
+usersRouter.post('/logout', authenticateLoginToken, (req:any,res,next)=>{
   if (req.token){
-    invalidatedTokens.push(req.token);
+    invalidatedTokens.push(req.tokens.loginToken);
     res.status(HttpStatusCodes.OK).json({message: 'You have been succesfully logged out.'})
   };
 });
 
-usersRouter.get('/verify', authenticateToken,(req,res,next)=>{
+usersRouter.get('/verify', authenticateLoginToken,(req,res,next)=>{
   res.status(HttpStatusCodes.OK).json({isValid: true});
 });
 
-usersRouter.get('/membershipLevel', authenticateToken, async (req:any,res,next)=>{
+usersRouter.get('/membershipLevel', authenticateLoginToken, async (req:any,res,next)=>{
   //get userID
-  const userID:string = req.payload.user._id;
+  const userID:string = req.payload.loginPayload.user._id;
   //get membership level
   const membershipDoc:Membership | null = await getMembershipByUserID(userID);
   //return it to the client if it exists
@@ -129,7 +129,7 @@ usersRouter.get('/membershipLevel', authenticateToken, async (req:any,res,next)=
     res.status(HttpStatusCodes.OK).json({membershipLevel: membershipDoc.tier});
   }else{
     res.status(HttpStatusCodes.NOT_FOUND).json({message: 'Membership information not found.'});
-  }
+  };
 });
 
 export default usersRouter;
