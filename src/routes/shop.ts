@@ -2,13 +2,70 @@ import Cart from '@src/classes/Cart';
 import HttpStatusCodes from '@src/constants/HttpStatusCodes';
 import { getAllItems, getItemByID, getItemByIdentifier, getItemByName } from '@src/controllers/item';
 import { invalidatedTokens, issueCartJWTToken } from '@src/helpers/auth';
-import {Router} from 'express'
-import {Item, Membership} from '../interfaces/interfaces';
+import { Router } from 'express'
+import { Item, Membership } from '../interfaces/interfaces';
 import { stripe } from '@src/util/stripe';
 import { authenticateCartToken, authenticateLoginToken } from '@src/middlewares/auth';
 import { getMembershipByUserID } from '@src/controllers/membership';
 
 export const shopRouter = Router();
+
+shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authenticateCartToken, async(req:any,res,next)=>{
+  const cartItems:Item[] = req.payload.cartPayload.cart.items;
+  // Convert each cart item to a Stripe line item object
+  const lineItems = cartItems.map(
+    cartItem => ({
+      reference: cartItem._id,
+      amount: Math.ceil((cartItem.price * cartItem.quantity)*100), //convert to cents
+      quantity: cartItem.quantity
+    })
+  );
+
+  // Get the customer's address from the request body
+  const address = req.body.address;
+
+  // Create a tax calculation using the Stripe API
+  const calculation = await stripe.tax.calculations.create({
+    currency: 'usd',
+    line_items: lineItems,
+    customer_details: {
+      address: {
+        line1: address.line1,
+        line2: address.line2 || '',
+        city: address.city,
+        state: address.state,
+        postal_code: address.postal_code,
+        country: address.country,
+      },
+      address_source: "billing"
+    },
+    expand: ['line_items.data.tax_breakdown']
+  });
+
+  let paymentIntent;
+
+  // Update the PaymentIntent if one already exists for this cart.
+  if (req.body.paymentIntent) {
+    paymentIntent = await stripe.paymentIntents.update(req.body.paymentIntent, {
+      amount: calculation.amount_total,
+      metadata: {tax_calculation: calculation.id},
+    });
+  } else {
+    paymentIntent = await stripe.paymentIntents.create({
+      currency: 'usd',
+      amount: calculation.amount_total,
+      metadata: {tax_calculation: calculation.id},
+      // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
+      automatic_payment_methods: {enabled: true},
+    });
+  };
+
+  res.status(200).json({
+    paymentIntentToken: paymentIntent.client_secret,
+    taxAmount: calculation.tax_amount_exclusive,
+    total: calculation.amount_total
+  })
+});
 
 shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticateLoginToken,async (req:any,res,next)=>{
   const items:Item[] = req.payload.cartPayload.cart.items;
@@ -58,7 +115,6 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
       totalAmount+=Math.ceil(item.price*100); //CONVERT TO CENTS BY MULTIPLYING 100!!!!
     });
   };
-  console.log(verifiedItems);
   //create payment intent
   const paymentIntent = await stripe.paymentIntents.create({
     amount: totalAmount,
