@@ -109,7 +109,7 @@ usersRouter.post('/login', async (req,res,next)=>{
 });
 
 usersRouter.post('/logout', authenticateLoginToken, (req:any,res,next)=>{
-  if (req.token){
+  if (req.tokens){
     invalidatedTokens.push(req.tokens.loginToken);
     res.status(HttpStatusCodes.OK).json({message: 'You have been succesfully logged out.'})
   };
