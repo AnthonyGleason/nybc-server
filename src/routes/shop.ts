@@ -16,7 +16,7 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   const lineItems = cartItems.map(
     cartItem => ({
       reference: cartItem._id,
-      amount: Math.ceil((cartItem.price * cartItem.quantity)*100), //convert to cents
+      amount: Math.floor((cartItem.price * cartItem.quantity)*100), //convert to cents
       quantity: cartItem.quantity
     })
   );
@@ -42,11 +42,19 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
     expand: ['line_items.data.tax_breakdown']
   });
 
-  let paymentIntent;
+  /*
 
+
+  IMPORTANT NOTES
+  THE PAYMENTID MUST BE EXTRACTED FROM THE FIRST HALF OF THE 
+
+  */
+
+  let paymentID = req.body.clientSecret.split('_secret_')[0]; //obtain the payment id from the first half of the clientSecret
+  let paymentIntent:any = {};
   // Update the PaymentIntent if one already exists for this cart.
-  if (req.body.paymentIntent) {
-    paymentIntent = await stripe.paymentIntents.update(req.body.paymentIntent, {
+  if (paymentID) {
+    paymentIntent = await stripe.paymentIntents.update(paymentID, {
       amount: calculation.amount_total,
       metadata: {tax_calculation: calculation.id},
     });
@@ -63,7 +71,7 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
     paymentIntentToken: paymentIntent.client_secret,
     taxAmount: calculation.tax_amount_exclusive,
     total: calculation.amount_total
-  })
+  });
 });
 
 const verifyCartItems = async function(items:Item[]):Promise<Item[]>{
@@ -84,7 +92,7 @@ const verifyCartItems = async function(items:Item[]):Promise<Item[]>{
 };
 
 shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticateLoginToken,async (req:any,res,next)=>{
-  const items:Item[] = req.payload.cartPayload.cart.items;
+  const items:Item[] = req.payload.cartPayload.cart.items;  
   //get membership level for user
   const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
   let totalAmount:number = 0; //IN CENTS!!!
@@ -110,10 +118,6 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
           discountPercent = 1;
           break;
       };
-      //update the item
-      console.log(totalAmount);
-      console.log('item price',item.price);
-      console.log('item discount', discountPercent)
       //apply the discount to the total amount 
       totalAmount += Math.floor(((item.price * 100 - (item.price * discountPercent) * 100) * item.quantity)); //CONVERT TO CENTS BY MULTIPLYING 100!!!! 
     });
