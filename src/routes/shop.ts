@@ -59,7 +59,6 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
       automatic_payment_methods: {enabled: true},
     });
   };
-
   res.status(200).json({
     paymentIntentToken: paymentIntent.client_secret,
     taxAmount: calculation.tax_amount_exclusive,
@@ -67,23 +66,30 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   })
 });
 
+const verifyCartItems = async function(items:Item[]):Promise<Item[]>{
+  let verifiedItems:Item[] = [];
+
+  for (const item of items) {
+    let verifiedItem: Item = item;
+    const itemDoc: Item | null = await getItemByID(item._id);
+
+    // Break loop if itemDoc is not found
+    if (!itemDoc) return verifiedItems
+
+    verifiedItem.price = itemDoc.price;
+    verifiedItems.push(verifiedItem);
+  };
+
+  return verifiedItems;
+};
+
 shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticateLoginToken,async (req:any,res,next)=>{
   const items:Item[] = req.payload.cartPayload.cart.items;
   //get membership level for user
   const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
-
   let totalAmount:number = 0; //IN CENTS!!!
   //grab the items from mongodb and verify the pricing of each item
-  let verifiedItems:Item[] = items;
-
-  items.forEach(async (item:Item)=>{
-    let verifiedItem:Item = item;
-    const itemDoc:Item | null = await getItemByID(item._id);
-    //break look if itemDoc is not found
-    if (!itemDoc) return;
-    verifiedItem.price=itemDoc.price;
-    verifiedItems.push(verifiedItem);
-  });
+  let verifiedItems:Item[] = await verifyCartItems(items);
   //apply the membership discount pricing to the cart
   if (membershipDoc){
     const membershipTier:string = membershipDoc.tier;
@@ -103,16 +109,18 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
         default: //user is a non-member
           discountPercent = 1;
           break;
-      }
+      };
       //update the item
-      item.price=item.price*discountPercent;
+      console.log(totalAmount);
+      console.log('item price',item.price);
+      console.log('item discount', discountPercent)
       //apply the discount to the total amount 
-      totalAmount+=Math.ceil(item.price*100); //CONVERT TO CENTS BY MULTIPLYING 100!!!!
+      totalAmount += Math.floor(((item.price * 100 - (item.price * discountPercent) * 100) * item.quantity)); //CONVERT TO CENTS BY MULTIPLYING 100!!!! 
     });
   }else{
     //apply non member pricing a membership document was not found.
     items.forEach((item:Item)=>{
-      totalAmount+=Math.ceil(item.price*100); //CONVERT TO CENTS BY MULTIPLYING 100!!!!
+      totalAmount += Math.floor(((item.price * 100 - (item.price * 1) * 100)*item.quantity)); //CONVERT TO CENTS BY MULTIPLYING 100!!!!
     });
   };
   //create payment intent
@@ -120,7 +128,6 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
     amount: totalAmount,
     currency: 'usd', // Change this to your preferred currency
   });
-
   res.json({ paymentIntentToken: paymentIntent.client_secret });
 });
 
