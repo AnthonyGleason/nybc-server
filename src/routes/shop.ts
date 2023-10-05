@@ -42,14 +42,6 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
     expand: ['line_items.data.tax_breakdown']
   });
 
-  /*
-
-
-  IMPORTANT NOTES
-  THE PAYMENTID MUST BE EXTRACTED FROM THE FIRST HALF OF THE 
-
-  */
-
   let paymentID = req.body.clientSecret.split('_secret_')[0]; //obtain the payment id from the first half of the clientSecret
   let paymentIntent:any = {};
   // Update the PaymentIntent if one already exists for this cart.
@@ -155,13 +147,9 @@ shopRouter.get('/carts',authenticateCartToken,(req:any,res,next)=>{
 });
 
 //update a cart based on the provided bearer token
-shopRouter.put('/carts',authenticateCartToken, authenticateLoginToken, async (req:any,res,next)=>{
+shopRouter.put('/carts',authenticateCartToken, async (req:any,res,next)=>{
   const itemID:string = req.body.itemID;
   let updatedQuantity:number = req.body.updatedQuantity;
-  //get membership tier for user
-  const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
-  let membershipTier:string = 'Non-Member';
-  if (membershipDoc) membershipTier = membershipDoc.tier;
   //handle invalid quantity
   if (updatedQuantity<0) updatedQuantity=0;
     //get cart
@@ -171,7 +159,7 @@ shopRouter.put('/carts',authenticateCartToken, authenticateLoginToken, async (re
       const itemDoc:Item | null = await getItemByID(itemID);
       if (itemDoc){
         //handle modify cart
-        cart.handleModifyCart(itemDoc, updatedQuantity,membershipTier);
+        cart.handleModifyCart(itemDoc, updatedQuantity);
         //invalidate old token
         invalidatedTokens.push(req.tokens.cartToken);
         //sign a new token for the user
