@@ -13,7 +13,7 @@ export default class Cart{
     let updatedPrice:number = itemDoc.price;
     if (itemIndex === undefined && updatedQuantity>0) {
       // Item is not in the user's cart; add it with the given quantity
-      //creating a new updated item and updating the properties of that does not work it gives NaN error on quantity
+      // creating a new updated item and updating the properties of that does not work it gives NaN error on quantity
       this.items.push({
         name: itemDoc.name,
         price: updatedPrice,
