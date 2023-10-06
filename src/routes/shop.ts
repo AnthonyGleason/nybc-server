@@ -3,31 +3,21 @@ import HttpStatusCodes from '@src/constants/HttpStatusCodes';
 import { getAllItems, getItemByID, getItemByIdentifier, getItemByName } from '@src/controllers/item';
 import { invalidatedTokens, issueCartJWTToken } from '@src/helpers/auth';
 import { Router } from 'express'
-import { Item, Membership, User } from '../interfaces/interfaces';
 import { stripe } from '@src/util/stripe';
 import { authenticateCartToken, authenticateLoginToken, handleModifyCartLoginAuth } from '@src/middlewares/auth';
 import { getMembershipByUserID } from '@src/controllers/membership';
 import { getUserByID } from '@src/controllers/user';
+import { BagelItem, Membership, SpreadItem, User } from '@src/interfaces/interfaces';
 
 export const shopRouter = Router();
 
-const verifyCartItems = async function(items:Item[]):Promise<Item[]>{
-  let verifiedItems:Item[] = items || [];
-
-  for (let item of verifiedItems){
-    const itemDoc:Item | null= await getItemByID(item._id);
-    if (itemDoc) item.price = itemDoc.price;
-  };
-  return verifiedItems;
-};
-
 shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authenticateCartToken, async(req:any,res,next)=>{
-  const cartItems:Item[] = req.payload.cartPayload.cart.items;
+  const cart:Cart = new Cart(req.payload.cartPayload.cart.items);
   // Convert each cart item to a Stripe line item object
-  const lineItems = cartItems.map(
+  const lineItems = cart.items.map(
     cartItem => ({
-      reference: cartItem._id,
-      amount: Math.floor((cartItem.price * cartItem.quantity)*100), //convert to cents
+      reference: cartItem.itemData._id,
+      amount: Math.floor((cartItem.unitPrice * cartItem.quantity)*100), //convert to cents
       quantity: cartItem.quantity
     })
   );
@@ -78,41 +68,14 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
 });
 
 shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticateLoginToken,async (req:any,res,next)=>{
-  const items:Item[] = req.payload.cartPayload.cart.items;  
+  let cart:Cart = new Cart(req.payload.cartPayload.cart.items);  
   //get membership level for user
   const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
   let totalAmount:number = 0; //IN CENTS!!!
   //grab the items from mongodb and verify the pricing of each item
-  let verifiedItems:Item[] = await verifyCartItems(items);
-  //apply the membership discount pricing to the cart
-  if (membershipDoc){
-    const membershipTier:string = membershipDoc.tier;
-    //apply membership pricing in switch statement
-    verifiedItems.forEach((item:Item)=>{
-      let discountPercent = 1;
-      switch(membershipTier){
-        case 'Gold Member':
-          discountPercent = 0.05;
-          break;
-        case 'Platinum Member':
-          discountPercent = 0.10;
-          break;
-        case 'Diamond Member':
-          discountPercent = 0.15;
-          break;
-        default: //user is a non-member
-          discountPercent = 1;
-          break;
-      };
-      //apply the discount to the total amount 
-      totalAmount += Math.floor(((item.price * 100 - (item.price * discountPercent) * 100) * item.quantity)); //CONVERT TO CENTS BY MULTIPLYING 100!!!! 
-    });
-  }else{
-    //apply non member pricing a membership document was not found.
-    items.forEach((item:Item)=>{
-      totalAmount += Math.floor(((item.price * 100 - (item.price * 1) * 100)*item.quantity)); //CONVERT TO CENTS BY MULTIPLYING 100!!!!
-    });
-  };
+  cart.verifyUnitPrices();
+  //apply the membership discount pricing to the cart if applicable
+  if (membershipDoc) cart.applyMembershipPricing(membershipDoc.tier);
   //create payment intent
   const paymentIntent = await stripe.paymentIntents.create({
     amount: totalAmount,
@@ -120,6 +83,7 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
   });
   res.json({ paymentIntentToken: paymentIntent.client_secret });
 });
+
 //verify a cart token
 shopRouter.get('/carts/verify',authenticateCartToken,(req:any,res,next)=>{
   res.status(HttpStatusCodes.OK).json({isValid: true,cart: req.payload.cartPayload.cart});
@@ -142,6 +106,7 @@ shopRouter.get('/carts',authenticateCartToken,(req:any,res,next)=>{
 //update a cart based on the provided bearer token
 shopRouter.put('/carts',authenticateCartToken, handleModifyCartLoginAuth,async (req:any,res,next)=>{
   let userDoc:User | null = null;
+  const selection:string | undefined = req.body.selection;
   //attempt to get the user's membership status
   if (req.payload.loginPayload && req.payload.loginPayload.user._id){
     userDoc = await getUserByID(req.payload.loginPayload.user._id);
@@ -157,33 +122,15 @@ shopRouter.put('/carts',authenticateCartToken, handleModifyCartLoginAuth,async (
   if (updatedQuantity<0) updatedQuantity=0;
     //get cart
     let cart:Cart = new Cart(req.payload.cartPayload.cart.items);
-    //verify cart prices
-    cart.items = await verifyCartItems(cart.items);
+    cart.verifyUnitPrices();
     //reapply discounts to items
-    cart.items.forEach((cartItem:Item)=>{
-      //calculate discounted price
-    if (membershipTier){
-      switch(membershipTier){
-        case 'Gold Member':
-          cartItem.price = cartItem.price - (cartItem.price * 0.05);          
-          break;
-        case 'Platinum Member':
-          cartItem.price = cartItem.price - (cartItem.price * 0.10); 
-          break;
-        case 'Diamond Member':
-          cartItem.price = cartItem.price - (cartItem.price * 0.15); 
-          break;
-        default:
-          break;
-      };
-      };
-    })
+    cart.applyMembershipPricing(membershipTier);
     try{
       //get item data from mongoDB
-      const itemDoc:Item | null = await getItemByID(itemID);
+      const itemDoc:BagelItem | SpreadItem | null = await getItemByID(itemID);
       if (itemDoc){
         //handle modify cart
-        cart.handleModifyCart(itemDoc, updatedQuantity, membershipTier);
+        cart.handleModifyCart(itemDoc,updatedQuantity,selection);
         //invalidate old token
         invalidatedTokens.push(req.tokens.cartToken);
         //sign a new token for the user
@@ -203,7 +150,7 @@ shopRouter.put('/carts',authenticateCartToken, handleModifyCartLoginAuth,async (
 //get all shop items
 shopRouter.get('/all', async (req,res,next)=>{
   try{
-    const allItems:Item[] | null = await getAllItems();
+    const allItems:(BagelItem | SpreadItem)[] | null = await getAllItems();
     if (allItems){
       res.status(HttpStatusCodes.OK).json({allItems:allItems});
     }else{
@@ -220,7 +167,7 @@ shopRouter.get('/all', async (req,res,next)=>{
 shopRouter.get('/item/:itemID', async (req,res,next)=>{
   const itemID = req.params.itemID;
   try{
-    const item:Item | null = await getItemByID(itemID);
+    const item:BagelItem | SpreadItem | null = await getItemByID(itemID);
     if (item){
       res.status(HttpStatusCodes.OK).json({item: item});
     }else{
@@ -231,9 +178,4 @@ shopRouter.get('/item/:itemID', async (req,res,next)=>{
     res.status(HttpStatusCodes.INTERNAL_SERVER_ERROR)
       .json({message: 'An error has occured when fetching item data!',allItems: []});
   };
-});
-
-//get the order data for provided order id
-shopRouter.get('/orders',(req,res,next)=>{
-
 });

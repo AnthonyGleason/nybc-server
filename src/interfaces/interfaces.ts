@@ -12,13 +12,27 @@ export interface User{
   _id:string | mongoose.Types.ObjectId //unique id given by mongodb
 };
 
-//item
-export interface Item{
+export interface SpreadItem{
   price: number,
   name: string,
-  quantity: number,
+  _id: string //unique id given by mongodb,
+  cat:string,
+};
+
+//item
+export interface BagelItem{
+  dozenPrice:number,
+  fourPrice:number,
+  name: string,
   _id: string, // unique id given by mongodb
-  index:number
+  cat:string,
+};
+
+export interface CartItem{
+  itemData: BagelItem | SpreadItem,
+  selection?: string
+  quantity: number,
+  unitPrice: number,
 };
 
 //order
@@ -27,7 +41,7 @@ export interface Order{
   userID:string,
   status:string,
   _id: string // unique id given by mongodb
-}
+};
 
 //membership
 export interface Membership{
@@ -35,4 +49,4 @@ export interface Membership{
   tier: string,
   userID: string,
   _id: string //unique id given by mongodb
-}
+};

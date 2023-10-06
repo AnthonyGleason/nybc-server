@@ -1,68 +1,145 @@
-import {Item} from '../interfaces/interfaces';
+import { getItemByID } from "@src/controllers/item";
+import { BagelItem, CartItem, SpreadItem } from "@src/interfaces/interfaces";
 
 export default class Cart{
-  items:Item[];
+  items:CartItem[];
+  subtotal:number;
+  tax:number;
+  total:number
 
-  constructor(items?:Item[]){
-    this.items = items || [];
+  constructor(
+    cartItems?:CartItem[],
+    subtotal?:number,
+    tax?:number,
+    total?:number,  
+  ){
+    this.items = cartItems || [];
+    this.subtotal = subtotal || 0;
+    this.tax = tax || 0;
+    this.total = total || 0;
   };
 
-  handleModifyCart = (itemDoc: Item, updatedQuantity: number,membershipTier?:string): void => {
-    const itemIndex: number | undefined = this.getIndexOfItemByName(itemDoc.name);
-    let updatedPrice:number = itemDoc.price;
+  calcSubtotal = ():number=>{
+    let totalPrice:number = 0;
+    //verify there are items in the cart
+    this.items.forEach((cartItem:CartItem)=>{
+      totalPrice += cartItem.unitPrice * cartItem.quantity;
+    });
+    this.total = totalPrice;
+    return totalPrice;
+  };
 
-    //calculate discounted price
-    if (membershipTier){
+  calcTotal = ():number=>{
+    this.total = this.calcSubtotal()+this.tax;
+    return this.total;
+  };
+
+  isCartEmpty = ():boolean=>{
+    //verify there are items in the cart
+    if (this.items.length<=0) return true;
+    return false;
+  };
+
+  applyMembershipPricing = (membershipTier:string)=>{
+    //verify there are items in the cart
+    if (this.isCartEmpty()) return;
+    //reiterate through the cart items
+    this.items.forEach((cartItem:CartItem)=>{
+      let discountMultiplier:number = 1;
       switch(membershipTier){
         case 'Gold Member':
-          updatedPrice = updatedPrice - (updatedPrice * 0.05);          
+          discountMultiplier = 0.05;    
           break;
         case 'Platinum Member':
-          updatedPrice = updatedPrice - (updatedPrice * 0.10); 
+          discountMultiplier = 0.10;
           break;
         case 'Diamond Member':
-          updatedPrice = updatedPrice - (updatedPrice * 0.15); 
+          discountMultiplier = 0.15;
           break;
         default:
           break;
       };
+      //handle applying the discount based on the item type
+      if (cartItem.itemData.cat==='bagel' && cartItem.selection === 'four') {
+        const tempItemData:BagelItem = cartItem.itemData as BagelItem;
+        cartItem.unitPrice = tempItemData.fourPrice - (tempItemData.fourPrice * discountMultiplier);
+      } else if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'dozen') {
+        const tempItemData:BagelItem = cartItem.itemData as BagelItem;
+        cartItem.unitPrice = tempItemData.dozenPrice - (tempItemData.dozenPrice * discountMultiplier);
+      } else if (cartItem.itemData.cat === 'spread') {
+        const tempItemData:SpreadItem = cartItem.itemData as SpreadItem;
+        cartItem.unitPrice = tempItemData.price - (tempItemData.price * discountMultiplier);
+      };
+    });
+  };
+
+  removeItemFromCart = (itemIndex:number)=>{
+    this.items.splice(itemIndex, 1);
+  };
+
+
+  getIndexOfItem = (itemName:string, selection?:string):number | null=>{
+    let foundIndex = null;
+    for (let index = 0; index < this.items.length; index++) {
+      const cartItem: CartItem = this.items[index];
+      if (cartItem.itemData.cat === 'bagel') {
+        const itemData: BagelItem = cartItem.itemData as BagelItem;
+        if (cartItem.selection === selection && itemData.name === itemName) {
+          foundIndex = index;
+          break; // Exit the loop if the item is found
+        };
+      } else if (cartItem.itemData.cat === 'spread') {
+        const itemData: SpreadItem = cartItem.itemData as SpreadItem;
+        if (cartItem.selection === selection && itemData.name === itemName) {
+          foundIndex = index;
+          break; // Exit the loop if the item is found
+        };
+      };
+    };    
+    return foundIndex;
+  };
+
+  verifyUnitPrices = async () =>{
+    for (let cartItem of this.items){
+      if (cartItem.itemData.cat==='bagel' && cartItem.selection === 'four') {
+        const tempItemData:BagelItem | null = await getItemByID(cartItem.itemData._id) as BagelItem;
+        if (tempItemData) cartItem.unitPrice = tempItemData.fourPrice;
+      } else if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'dozen') {
+        const tempItemData:BagelItem | null = await getItemByID(cartItem.itemData._id) as BagelItem;
+        if (tempItemData) cartItem.unitPrice = tempItemData.dozenPrice;
+      } else if (cartItem.itemData.cat === 'spread') {
+        const tempItemData:SpreadItem | null = await getItemByID(cartItem.itemData._id) as SpreadItem;
+        if (tempItemData) cartItem.unitPrice = tempItemData.price;
+      };
     };
-    if (itemIndex === undefined && updatedQuantity>0) {
+  };
+
+  handleModifyCart = (itemDoc:BagelItem | SpreadItem, updatedQuantity:number, selection?:string)=>{
+    const itemIndex:number | null = this.getIndexOfItem(itemDoc.name , selection || undefined);
+    if (itemIndex === null && updatedQuantity>0) {
       // Item is not in the user's cart; add it with the given quantity
-      // creating a new updated item and updating the properties of that does not work it gives NaN error on quantity
+      let unitPrice:number = 0;
+      if (itemDoc.cat==='bagel' && selection==='four'){
+        const tempItemDoc:BagelItem = itemDoc as BagelItem;
+        unitPrice = tempItemDoc.fourPrice;
+      }else if (itemDoc.cat==='bagel' && selection==='dozen'){
+        const tempItemDoc:BagelItem = itemDoc as BagelItem;
+        unitPrice = tempItemDoc.dozenPrice;
+      } else if (itemDoc.cat==='spread'){
+        const tempItemDoc:SpreadItem = itemDoc as SpreadItem;
+        unitPrice = tempItemDoc.price;
+      };
       this.items.push({
-        name: itemDoc.name,
-        price: updatedPrice,
+        itemData: itemDoc,
+        selection: selection || undefined,
         quantity: updatedQuantity,
-        _id: itemDoc._id,
-        index: itemDoc.index
+        unitPrice: unitPrice,
       });
-    }else if (itemIndex!==undefined){
+    }else if (itemIndex!==null){
       // Item already exists in the user's cart, update the quantity
-      const item = this.items[itemIndex];
-      item.price = updatedPrice;
-      item.quantity = updatedQuantity;
+      this.items[itemIndex].quantity = updatedQuantity;
       // If the new item quantity is less than or equal to 0, remove that item
-      if (item.quantity <= 0) {
-        this.removeItemFromCart(item.name);
-      };
-    };
-  };
-
-  getIndexOfItemByName = (itemName: string): number | undefined => {
-    for (let i = 0; i < this.items.length; i++) {
-      if (this.items[i].name === itemName) {
-        return i;
-      };
-    };
-    return undefined;
-  };
-
-  removeItemFromCart = (itemName: string): void => {
-    const itemIndex: number | undefined = this.getIndexOfItemByName(itemName);
-
-    if (itemIndex !== undefined) {
-      this.items.splice(itemIndex, 1);
+      if (this.items[itemIndex].quantity) this.removeItemFromCart(itemIndex);
     };
   };
 };

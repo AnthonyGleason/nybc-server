@@ -7,7 +7,15 @@ const ItemSchema = new mongoose.Schema({
   },
   price:{
     type: Number,
-    required: true
+  },
+  fourPrice:{
+    type:Number,
+  },
+  dozenPrice:{
+    type:Number,
+  },
+  cat:{
+    type: String,
   }
 });
 
