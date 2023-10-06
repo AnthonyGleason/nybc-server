@@ -3,12 +3,23 @@ import HttpStatusCodes from '@src/constants/HttpStatusCodes';
 import { getAllItems, getItemByID, getItemByIdentifier, getItemByName } from '@src/controllers/item';
 import { invalidatedTokens, issueCartJWTToken } from '@src/helpers/auth';
 import { Router } from 'express'
-import { Item, Membership } from '../interfaces/interfaces';
+import { Item, Membership, User } from '../interfaces/interfaces';
 import { stripe } from '@src/util/stripe';
-import { authenticateCartToken, authenticateLoginToken } from '@src/middlewares/auth';
+import { authenticateCartToken, authenticateLoginToken, handleModifyCartLoginAuth } from '@src/middlewares/auth';
 import { getMembershipByUserID } from '@src/controllers/membership';
+import { getUserByID } from '@src/controllers/user';
 
 export const shopRouter = Router();
+
+const verifyCartItems = async function(items:Item[]):Promise<Item[]>{
+  let verifiedItems:Item[] = items || [];
+
+  for (let item of verifiedItems){
+    const itemDoc:Item | null= await getItemByID(item._id);
+    if (itemDoc) item.price = itemDoc.price;
+  };
+  return verifiedItems;
+};
 
 shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authenticateCartToken, async(req:any,res,next)=>{
   const cartItems:Item[] = req.payload.cartPayload.cart.items;
@@ -66,23 +77,6 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   });
 });
 
-const verifyCartItems = async function(items:Item[]):Promise<Item[]>{
-  let verifiedItems:Item[] = [];
-
-  for (const item of items) {
-    let verifiedItem: Item = item;
-    const itemDoc: Item | null = await getItemByID(item._id);
-
-    // Break loop if itemDoc is not found
-    if (!itemDoc) return verifiedItems
-
-    verifiedItem.price = itemDoc.price;
-    verifiedItems.push(verifiedItem);
-  };
-
-  return verifiedItems;
-};
-
 shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticateLoginToken,async (req:any,res,next)=>{
   const items:Item[] = req.payload.cartPayload.cart.items;  
   //get membership level for user
@@ -126,7 +120,6 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
   });
   res.json({ paymentIntentToken: paymentIntent.client_secret });
 });
-
 //verify a cart token
 shopRouter.get('/carts/verify',authenticateCartToken,(req:any,res,next)=>{
   res.status(HttpStatusCodes.OK).json({isValid: true,cart: req.payload.cartPayload.cart});
@@ -147,19 +140,50 @@ shopRouter.get('/carts',authenticateCartToken,(req:any,res,next)=>{
 });
 
 //update a cart based on the provided bearer token
-shopRouter.put('/carts',authenticateCartToken, async (req:any,res,next)=>{
+shopRouter.put('/carts',authenticateCartToken, handleModifyCartLoginAuth,async (req:any,res,next)=>{
+  let userDoc:User | null = null;
+  //attempt to get the user's membership status
+  if (req.payload.loginPayload && req.payload.loginPayload.user._id){
+    userDoc = await getUserByID(req.payload.loginPayload.user._id);
+  };
+  let membershipTier:string = 'Non-Member';
+  if (userDoc){
+    const membershipDoc: Membership | null = await getMembershipByUserID(userDoc._id as string);
+    if (membershipDoc) membershipTier = membershipDoc.tier;
+  };
   const itemID:string = req.body.itemID;
   let updatedQuantity:number = req.body.updatedQuantity;
   //handle invalid quantity
   if (updatedQuantity<0) updatedQuantity=0;
     //get cart
     let cart:Cart = new Cart(req.payload.cartPayload.cart.items);
+    //verify cart prices
+    cart.items = await verifyCartItems(cart.items);
+    //reapply discounts to items
+    cart.items.forEach((cartItem:Item)=>{
+      //calculate discounted price
+    if (membershipTier){
+      switch(membershipTier){
+        case 'Gold Member':
+          cartItem.price = cartItem.price - (cartItem.price * 0.05);          
+          break;
+        case 'Platinum Member':
+          cartItem.price = cartItem.price - (cartItem.price * 0.10); 
+          break;
+        case 'Diamond Member':
+          cartItem.price = cartItem.price - (cartItem.price * 0.15); 
+          break;
+        default:
+          break;
+      };
+      };
+    })
     try{
       //get item data from mongoDB
       const itemDoc:Item | null = await getItemByID(itemID);
       if (itemDoc){
         //handle modify cart
-        cart.handleModifyCart(itemDoc, updatedQuantity);
+        cart.handleModifyCart(itemDoc, updatedQuantity, membershipTier);
         //invalidate old token
         invalidatedTokens.push(req.tokens.cartToken);
         //sign a new token for the user

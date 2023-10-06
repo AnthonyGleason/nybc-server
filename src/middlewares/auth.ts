@@ -2,6 +2,17 @@ import { NextFunction, Response } from "express";
 import jwt from 'jsonwebtoken';
 import { invalidatedTokens } from "@src/helpers/auth";
 
+export const handleModifyCartLoginAuth = function(req: any, res: any, next: any) {
+  const authHeader: string | undefined = req.headers.authorization;
+  if (authHeader && authHeader.split(' ')[1] !== 'null') { //null is stringified when passed to the server
+    // Assuming authenticateLoginToken handles authentication properly
+    authenticateLoginToken(req, res, next);
+  } else{
+    next();
+  };
+};
+
+
 //authenticates jwt login tokens
 export const authenticateLoginToken = function(req:any, res:any, next:any) {
   req.payload = req.payload || {}; //grabs the payload from the last middleware if it exists otherwise initializes it

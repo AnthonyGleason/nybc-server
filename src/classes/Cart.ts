@@ -7,10 +7,26 @@ export default class Cart{
     this.items = items || [];
   };
 
-  handleModifyCart = (itemDoc: Item, updatedQuantity: number): void => {
+  handleModifyCart = (itemDoc: Item, updatedQuantity: number,membershipTier?:string): void => {
     const itemIndex: number | undefined = this.getIndexOfItemByName(itemDoc.name);
-    //update item price based on membership tier
     let updatedPrice:number = itemDoc.price;
+
+    //calculate discounted price
+    if (membershipTier){
+      switch(membershipTier){
+        case 'Gold Member':
+          updatedPrice = updatedPrice - (updatedPrice * 0.05);          
+          break;
+        case 'Platinum Member':
+          updatedPrice = updatedPrice - (updatedPrice * 0.10); 
+          break;
+        case 'Diamond Member':
+          updatedPrice = updatedPrice - (updatedPrice * 0.15); 
+          break;
+        default:
+          break;
+      };
+    };
     if (itemIndex === undefined && updatedQuantity>0) {
       // Item is not in the user's cart; add it with the given quantity
       // creating a new updated item and updating the properties of that does not work it gives NaN error on quantity
@@ -24,6 +40,7 @@ export default class Cart{
     }else if (itemIndex!==undefined){
       // Item already exists in the user's cart, update the quantity
       const item = this.items[itemIndex];
+      item.price = updatedPrice;
       item.quantity = updatedQuantity;
       // If the new item quantity is less than or equal to 0, remove that item
       if (item.quantity <= 0) {
