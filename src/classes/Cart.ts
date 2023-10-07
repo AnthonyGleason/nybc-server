@@ -5,18 +5,26 @@ export default class Cart{
   items:CartItem[];
   subtotal:number;
   tax:number;
-  total:number
+  totalQuantity:number;
 
   constructor(
     cartItems?:CartItem[],
     subtotal?:number,
-    tax?:number,
-    total?:number,  
+    tax?:number
   ){
     this.items = cartItems || [];
     this.subtotal = subtotal || 0;
     this.tax = tax || 0;
-    this.total = total || 0;
+    this.totalQuantity = 0;
+  };
+
+  calcTotalQuantity = ():number=>{
+    let totalQuantity:number = 0;
+    this.items.forEach((item:CartItem)=>{
+      totalQuantity+=item.quantity;
+    });
+    this.totalQuantity = totalQuantity;
+    return totalQuantity
   };
 
   calcSubtotal = ():number=>{
@@ -25,13 +33,8 @@ export default class Cart{
     this.items.forEach((cartItem:CartItem)=>{
       totalPrice += cartItem.unitPrice * cartItem.quantity;
     });
-    this.total = totalPrice;
+    this.subtotal = totalPrice;
     return totalPrice;
-  };
-
-  calcTotal = ():number=>{
-    this.total = this.calcSubtotal()+this.tax;
-    return this.total;
   };
 
   isCartEmpty = ():boolean=>{
@@ -139,7 +142,7 @@ export default class Cart{
       // Item already exists in the user's cart, update the quantity
       this.items[itemIndex].quantity = updatedQuantity;
       // If the new item quantity is less than or equal to 0, remove that item
-      if (this.items[itemIndex].quantity) this.removeItemFromCart(itemIndex);
+      if (this.items[itemIndex].quantity <=0) this.removeItemFromCart(itemIndex);
     };
   };
 };

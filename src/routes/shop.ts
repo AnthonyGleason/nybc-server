@@ -118,33 +118,39 @@ shopRouter.put('/carts',authenticateCartToken, handleModifyCartLoginAuth,async (
   };
   const itemID:string = req.body.itemID;
   let updatedQuantity:number = req.body.updatedQuantity;
+
   //handle invalid quantity
   if (updatedQuantity<0) updatedQuantity=0;
-    //get cart
-    let cart:Cart = new Cart(req.payload.cartPayload.cart.items);
-    cart.verifyUnitPrices();
-    //reapply discounts to items
-    cart.applyMembershipPricing(membershipTier);
-    try{
-      //get item data from mongoDB
-      const itemDoc:BagelItem | SpreadItem | null = await getItemByID(itemID);
-      if (itemDoc){
-        //handle modify cart
-        cart.handleModifyCart(itemDoc,updatedQuantity,selection);
-        //invalidate old token
-        invalidatedTokens.push(req.tokens.cartToken);
-        //sign a new token for the user
-        const token:string = issueCartJWTToken(cart);
-        //send it to the client
-        res.status(HttpStatusCodes.OK).json({
-          cartToken: token,
-          cart: cart
-        });
-      };
-    }catch(err){
-      console.log(err);
-      res.status(HttpStatusCodes.NOT_FOUND).json({message: 'The requested item was not found.'});
+  //get cart
+  let cart:Cart = new Cart(req.payload.cartPayload.cart.items);
+  try{
+    //get item data from mongoDB
+    const itemDoc:BagelItem | SpreadItem | null = await getItemByID(itemID);
+    if (itemDoc){
+      //handle modify cart
+      cart.handleModifyCart(itemDoc,updatedQuantity,selection);
+      //invalidate old token
+      invalidatedTokens.push(req.tokens.cartToken);
+      //perform cleanup and verification
+      cart.verifyUnitPrices();
+      //reapply discounts to items
+      cart.applyMembershipPricing(membershipTier);
+      cart.calcSubtotal();
+      cart.calcTotalQuantity();
+      
+      //sign a new token for the user
+      const token:string = issueCartJWTToken(cart);
+      
+      //send it to the client
+      res.status(HttpStatusCodes.OK).json({
+        cartToken: token,
+        cart: cart
+      });
     };
+  }catch(err){
+    console.log(err);
+    res.status(HttpStatusCodes.NOT_FOUND).json({message: 'The requested item was not found.'});
+  };
 });
 
 //get all shop items
