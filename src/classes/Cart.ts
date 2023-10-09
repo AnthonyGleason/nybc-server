@@ -45,10 +45,11 @@ export default class Cart{
 
   applyMembershipPricing = (membershipTier:string)=>{
     //verify there are items in the cart
-    if (this.isCartEmpty()) return;
+    //If the user is not a member do not continue
+    if (this.isCartEmpty() || membershipTier ==='Non-Member') return;
     //reiterate through the cart items
     this.items.forEach((cartItem:CartItem)=>{
-      let discountMultiplier:number = 1;
+      let discountMultiplier:number = 0;
       switch(membershipTier){
         case 'Gold Member':
           discountMultiplier = 0.05;    
@@ -65,7 +66,11 @@ export default class Cart{
       //handle applying the discount based on the item type
       if (cartItem.itemData.cat==='bagel' && cartItem.selection === 'four') {
         const tempItemData:BagelItem = cartItem.itemData as BagelItem;
+        console.log(discountMultiplier);
+        console.log(tempItemData.fourPrice * discountMultiplier);
+        console.log('unit price before change', cartItem.unitPrice)
         cartItem.unitPrice = tempItemData.fourPrice - (tempItemData.fourPrice * discountMultiplier);
+        console.log('unit price after change', cartItem.unitPrice);
       } else if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'dozen') {
         const tempItemData:BagelItem = cartItem.itemData as BagelItem;
         cartItem.unitPrice = tempItemData.dozenPrice - (tempItemData.dozenPrice * discountMultiplier);

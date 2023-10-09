@@ -2,7 +2,7 @@ import { NextFunction, Response } from "express";
 import jwt from 'jsonwebtoken';
 import { invalidatedTokens } from "@src/helpers/auth";
 
-export const handleModifyCartLoginAuth = function(req: any, res: any, next: any) {
+export const handleCartLoginAuth = function(req: any, res: any, next: any) {
   const authHeader: string | undefined = req.headers.authorization;
   if (authHeader && authHeader.split(' ')[1] !== 'null') { //null is stringified when passed to the server
     // Assuming authenticateLoginToken handles authentication properly

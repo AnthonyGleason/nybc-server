@@ -1,10 +1,10 @@
 import Cart from '@src/classes/Cart';
 import HttpStatusCodes from '@src/constants/HttpStatusCodes';
-import { getAllItems, getItemByID, getItemByIdentifier, getItemByName } from '@src/controllers/item';
+import { getAllItems, getItemByID } from '@src/controllers/item';
 import { invalidatedTokens, issueCartJWTToken } from '@src/helpers/auth';
 import { Router } from 'express'
 import { stripe } from '@src/util/stripe';
-import { authenticateCartToken, authenticateLoginToken, handleModifyCartLoginAuth } from '@src/middlewares/auth';
+import { authenticateCartToken, authenticateLoginToken, handleCartLoginAuth} from '@src/middlewares/auth';
 import { getMembershipByUserID } from '@src/controllers/membership';
 import { getUserByID } from '@src/controllers/user';
 import { BagelItem, Membership, SpreadItem, User } from '@src/interfaces/interfaces';
@@ -99,12 +99,30 @@ shopRouter.post('/carts',(req,res,next)=>{
 });
 
 //get the user's current cart based on provided bearer token
-shopRouter.get('/carts',authenticateCartToken,(req:any,res,next)=>{
+shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any,res,next)=>{
+  const cart:Cart = new Cart(req.payload.cartPayload.cart.items);
+  let userDoc:User | null = null;
+  let membershipTier:string = 'Non-Member';
+  //a login token was provided
+  if (req.payload.loginPayload && req.payload.loginPayload.user._id){
+    userDoc = await getUserByID(req.payload.loginPayload.user._id);
+  };
+  //a user was found for the provided token
+  if (userDoc){
+    const membershipDoc: Membership | null = await getMembershipByUserID(userDoc._id as string);
+    if (membershipDoc) membershipTier = membershipDoc.tier;
+  };
+  //perform cleanup and verification
+  cart.verifyUnitPrices();
+  //reapply discounts to items
+  cart.applyMembershipPricing(membershipTier);
+  cart.calcSubtotal();
+  cart.calcTotalQuantity();
   res.status(HttpStatusCodes.OK).json({cart: req.payload.cartPayload.cart});
 });
 
 //update a cart based on the provided bearer token
-shopRouter.put('/carts',authenticateCartToken, handleModifyCartLoginAuth,async (req:any,res,next)=>{
+shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:any,res,next)=>{
   let userDoc:User | null = null;
   const selection:string | undefined = req.body.selection;
   //attempt to get the user's membership status
@@ -140,7 +158,6 @@ shopRouter.put('/carts',authenticateCartToken, handleModifyCartLoginAuth,async (
       
       //sign a new token for the user
       const token:string = issueCartJWTToken(cart);
-      
       //send it to the client
       res.status(HttpStatusCodes.OK).json({
         cartToken: token,
