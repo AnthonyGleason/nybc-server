@@ -7,7 +7,7 @@ import { stripe } from '@src/util/stripe';
 import { authenticateCartToken, authenticateLoginToken, handleCartLoginAuth} from '@src/middlewares/auth';
 import { getMembershipByUserID } from '@src/controllers/membership';
 import { getUserByID } from '@src/controllers/user';
-import { BagelItem, Membership, SpreadItem, User } from '@src/interfaces/interfaces';
+import { BagelItem, CartItem, Membership, SpreadItem, User } from '@src/interfaces/interfaces';
 
 export const shopRouter = Router();
 
@@ -15,8 +15,8 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   const cart:Cart = new Cart(req.payload.cartPayload.cart.items);
   // Convert each cart item to a Stripe line item object
   const lineItems = cart.items.map(
-    cartItem => ({
-      reference: cartItem.itemData._id,
+    (cartItem:CartItem,index:number) => ({
+      reference: index,
       amount: Math.floor((cartItem.unitPrice * cartItem.quantity)*100), //convert to cents
       quantity: cartItem.quantity
     })
@@ -71,14 +71,15 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
   let cart:Cart = new Cart(req.payload.cartPayload.cart.items);  
   //get membership level for user
   const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
-  let totalAmount:number = 0; //IN CENTS!!!
-  //grab the items from mongodb and verify the pricing of each item
+  //perform cleanup and verification
   cart.verifyUnitPrices();
-  //apply the membership discount pricing to the cart if applicable
+  cart.calcTotalQuantity();
+  //reapply discounts to items
   if (membershipDoc) cart.applyMembershipPricing(membershipDoc.tier);
+  cart.calcSubtotal();
   //create payment intent
   const paymentIntent = await stripe.paymentIntents.create({
-    amount: totalAmount,
+    amount: Math.floor(cart.subtotal * 100),
     currency: 'usd', // Change this to your preferred currency
   });
   res.json({ paymentIntentToken: paymentIntent.client_secret });
@@ -114,10 +115,10 @@ shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any
   };
   //perform cleanup and verification
   cart.verifyUnitPrices();
+  cart.calcTotalQuantity();
   //reapply discounts to items
   cart.applyMembershipPricing(membershipTier);
   cart.calcSubtotal();
-  cart.calcTotalQuantity();
   res.status(HttpStatusCodes.OK).json({cart: req.payload.cartPayload.cart});
 });
 
@@ -151,10 +152,10 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
       invalidatedTokens.push(req.tokens.cartToken);
       //perform cleanup and verification
       cart.verifyUnitPrices();
+      cart.calcTotalQuantity();
       //reapply discounts to items
       cart.applyMembershipPricing(membershipTier);
       cart.calcSubtotal();
-      cart.calcTotalQuantity();
       
       //sign a new token for the user
       const token:string = issueCartJWTToken(cart);

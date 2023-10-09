@@ -66,11 +66,7 @@ export default class Cart{
       //handle applying the discount based on the item type
       if (cartItem.itemData.cat==='bagel' && cartItem.selection === 'four') {
         const tempItemData:BagelItem = cartItem.itemData as BagelItem;
-        console.log(discountMultiplier);
-        console.log(tempItemData.fourPrice * discountMultiplier);
-        console.log('unit price before change', cartItem.unitPrice)
         cartItem.unitPrice = tempItemData.fourPrice - (tempItemData.fourPrice * discountMultiplier);
-        console.log('unit price after change', cartItem.unitPrice);
       } else if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'dozen') {
         const tempItemData:BagelItem = cartItem.itemData as BagelItem;
         cartItem.unitPrice = tempItemData.dozenPrice - (tempItemData.dozenPrice * discountMultiplier);
