@@ -46,7 +46,12 @@ if (EnvVars.NodeEnv === NodeEnvs.Production.valueOf()) {
   app.use(helmet());
 }
 
-app.use(cors());
+//setup cors
+const corsOptions = {
+  origin: '*',
+};
+
+app.use(cors(corsOptions));
 
 // Create and configure the transporter
 export const transporter = nodemailer.createTransport({
