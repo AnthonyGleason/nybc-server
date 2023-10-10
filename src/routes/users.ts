@@ -264,7 +264,14 @@ usersRouter.put('/forgotPassword/:resetID', async (req,res,next)=>{
   };
 });
 
-//get current account info
+//get current account settings
+usersRouter.get('/settings', authenticateLoginToken, async (req:any,res,next)=>{
+  const userDoc:User | null = await getUserByID(req.payload.loginPayload.user._id);
+});
+
 //update account settings
+usersRouter.put('/settings', authenticateLoginToken, async (req,res,next)=>{
+
+});
 
 export default usersRouter;
