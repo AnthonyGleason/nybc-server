@@ -48,7 +48,7 @@ if (EnvVars.NodeEnv === NodeEnvs.Production.valueOf()) {
 
 //setup cors
 const corsOptions = {
-  origin: ['http://localhost:3000', 'nybagelsclub.com', 'www.nybagelsclub.com'],
+  origin: ['http://localhost:3000', 'https://nybagelsclub.com', 'https://www.nybagelsclub.com'],
 };
 
 app.use(cors(corsOptions));
