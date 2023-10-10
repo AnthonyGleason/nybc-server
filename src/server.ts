@@ -46,11 +46,11 @@ if (EnvVars.NodeEnv === NodeEnvs.Production.valueOf()) {
   app.use(helmet());
 }
 
-//setup cors
+// Setup CORS
 const corsOptions = {
-  origin: ['http://localhost:3000', 'https://nybagelsclub.com', 'https://www.nybagelsclub.com'],
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-  allowedHeaders: 'Content-Type,Authorization,Cart-Token',
+  origin: ['http://localhost:3000', 'https://nybagelsclub.com', 'https://www.nybagelsclub.com'], // Allowed client connections
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'], // Allowed methods
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cart-Token'], // Allowed headers
 };
 
 app.use(cors(corsOptions));
