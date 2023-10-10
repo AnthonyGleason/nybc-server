@@ -46,7 +46,12 @@ if (EnvVars.NodeEnv === NodeEnvs.Production.valueOf()) {
   app.use(helmet());
 }
 
-app.use(cors());
+//setup cors
+const corsOptions = {
+  origin: ['http://localhost:3000', 'https://nybagelsclub.com', 'https://www.nybagelsclub.com'],
+};
+
+app.use(cors(corsOptions));
 
 // Create and configure the transporter
 export const transporter = nodemailer.createTransport({
