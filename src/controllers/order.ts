@@ -1,10 +1,26 @@
-import { Order } from "@src/interfaces/interfaces";
+import { Address, CartInterface, Order } from "@src/interfaces/interfaces";
 import { OrderModel } from "@src/models/Order";
 
 //create a new order
-export const createOrder = async function(userID:string){
+export const createOrder = async function(
+  userID:string,
+  orderNum:string,
+  totalAmount:number,
+  cart:CartInterface,
+  shippingAddress:Address,
+  trackingNumber?:string,
+  billingAddress?:Address,
+  giftMessage?:string
+  ){
   return await OrderModel.create({
     userID: userID,
+    orderNum: orderNum,
+    totalAmount:totalAmount,
+    cart:cart,
+    shippingAddress:shippingAddress,
+    trackingNumber:trackingNumber,
+    billingAddress:billingAddress,
+    giftMessage:giftMessage,
   });
 };
 

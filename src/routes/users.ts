@@ -1,11 +1,12 @@
-import { createNewUser, getUserByEmail } from "@src/controllers/user";
-import {Membership, User} from "@src/interfaces/interfaces";
+import { createNewUser, getUserByEmail, getUserByID } from "@src/controllers/user";
+import {Membership, PasswordReset, User} from "@src/interfaces/interfaces";
 import { Router } from "express";
 import bcrypt from 'bcrypt';
 import HttpStatusCodes from "@src/constants/HttpStatusCodes";
-import { invalidatedTokens, issueUserJWTToken } from "@src/helpers/auth";
+import { invalidatedTokens, issueUserJWTToken, passwordResetTokens } from "@src/helpers/auth";
 import { createMembership, getMembershipByUserID } from "@src/controllers/membership";
 import { authenticateLoginToken } from "@src/middlewares/auth";
+import { transporter } from "@src/server";
 
 const usersRouter = Router();
 
@@ -131,5 +132,102 @@ usersRouter.get('/membershipLevel', authenticateLoginToken, async (req:any,res,n
     res.status(HttpStatusCodes.NOT_FOUND).json({message: 'Membership information not found.'});
   };
 });
+
+//send forgot password email
+usersRouter.post('/forgotPassword', async(req:any,res,next)=>{
+  const userEmail:string = req.body.email;
+  const getRandomString = function(length: number) {
+    let counter: number = length;
+    let string: string = '';
+    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890';
+    while (counter > 0) {
+      string += charset.charAt(Math.floor(Math.random() * charset.length));
+      counter--;
+    }
+    return string;
+  };
+
+  const randomString:string = getRandomString(50);
+  const url:string = `https://nybagelsclub.com/accounts/password/reset/${randomString}`;
+  if (userEmail){
+    const mailOptions = {
+      from: 'noreply@nybagelsclub.com',
+      to: userEmail,
+      subject: 'Forgot Password',
+      text: `We have received a request to update your account password. If you initiated this action and wish to proceed with resetting your password, please click on the securely generated link: ${url}. Please note that this link will expire in 10 minutes for security purposes.`,
+    };
+  
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.log(error);
+        res.status(HttpStatusCodes.INTERNAL_SERVER_ERROR).json({isEmailSent: false});
+      } else {
+        //no errors email was sent
+
+        //create the password reset object
+        const passwordReset:PasswordReset = {
+          dateCreated: new Date(),
+          resetID: randomString,
+          email: userEmail
+        };
+        
+        //if the passwordResetTokens array is not empty check to see if there are any current pending tokens for the email and remove them
+        if (passwordResetTokens.length>0){
+          for (let i = passwordResetTokens.length - 1; i >= 0; i--) {
+            if (passwordResetTokens[i].email === userEmail) {
+              passwordResetTokens.splice(i, 1);
+            };
+          };     
+        };
+
+        passwordResetTokens.push(passwordReset);
+        res.status(HttpStatusCodes.OK).json({isEmailSent: true});
+      };
+    });
+  }else{
+    res.status(HttpStatusCodes.NOT_FOUND).json({isEmailSent: false});
+  };
+});
+
+//get forgot password status
+usersRouter.get('/forgotPassword/:resetID',(req,res,next)=>{
+  let isExpired:boolean = true;
+  //get id from route
+  const resetID:string = req.params.resetID;
+  //find the password reset item
+  const foundItem:PasswordReset | undefined = passwordResetTokens.find(item => item.resetID === resetID);
+  //send the user its expired status
+  if (foundItem) {
+    const currentTime = new Date(); // Get the current time
+    const tenMinutesAgo = new Date(currentTime.getTime() - 10 * 60 * 1000); // Calculate time 10 minutes ago
+    const dateCreated = new Date(foundItem.dateCreated);
+    isExpired = dateCreated <= tenMinutesAgo;
+    res.status(HttpStatusCodes.OK).json({isExpired: isExpired});
+  } else {
+    // No item with the matching email was found
+    res.status(HttpStatusCodes.NOT_FOUND).json({isExpired: isExpired});
+  }; 
+});
+
+//forgot password update route
+usersRouter.put('/forgotPassword/:resetID',(req,res,next)=>{
+  let isExpired:boolean = true;
+  //get id from route
+  const resetID:string = req.params.resetID;
+  //get token from array
+  const foundItem:PasswordReset | undefined = passwordResetTokens.find(item => item.resetID === resetID);
+  //determine if token is expired
+  //get password and password conf from req body
+  //if passwords match proceed and token is not expired
+    //get user doc based on email
+    //use bcrypt to hash the new password
+    //update the user doc with the new password
+  //return is expired to user if conditional is not met
+
+  //need to return wasUpdated
+});
+
+//get current account info
+//update account settings
 
 export default usersRouter;

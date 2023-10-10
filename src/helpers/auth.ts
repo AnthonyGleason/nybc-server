@@ -1,4 +1,4 @@
-import {User} from '@src/interfaces/interfaces';
+import {PasswordReset, User} from '@src/interfaces/interfaces';
 import jwt from 'jsonwebtoken'
 
 //issue jwt login tokens
@@ -25,5 +25,5 @@ export const issueCartJWTToken = function(cart:any){
   });
 };
 
-
+export let passwordResetTokens: PasswordReset[] = [];
 export let invalidatedTokens: String[] = [];

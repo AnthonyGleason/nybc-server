@@ -203,3 +203,13 @@ shopRouter.get('/item/:itemID', async (req,res,next)=>{
       .json({message: 'An error has occured when fetching item data!',allItems: []});
   };
 });
+
+
+//get order by order id
+//get all orders for user
+//create an order
+
+//admin menu
+//get all orders
+//update order status
+//create a shipping label for order

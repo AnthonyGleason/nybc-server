@@ -22,6 +22,7 @@ import { NodeEnvs } from '@src/constants/misc';
 import { RouteError } from '@src/other/classes';
 import apiRouter from '@src/routes/api';
 import cors from 'cors';
+import nodemailer from 'nodemailer';
 
 // **** Variables **** //
 
@@ -47,6 +48,15 @@ if (EnvVars.NodeEnv === NodeEnvs.Production.valueOf()) {
 
 //setup cors
 app.use(cors());
+
+// Create and configure the transporter
+export const transporter = nodemailer.createTransport({
+  service: 'Gmail',
+  auth: {
+    user: 'noreply@nybagelsclub.com', // Google Workspace email address
+    pass: process.env.NO_REPLY_EMAIL_PASSWORD, // email password from dotenv, app specific password needs 2fa enabled on account
+  },
+});
 
 //setup mongoose, connecting to the database url in .env
 const mongoose = require('mongoose');

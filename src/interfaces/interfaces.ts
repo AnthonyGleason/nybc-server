@@ -1,3 +1,4 @@
+import Cart from "@src/classes/Cart"
 import mongoose from "mongoose"
 
 //user
@@ -35,11 +36,33 @@ export interface CartItem{
   unitPrice: number,
 };
 
+export interface Address{
+  line1:string,
+  line2?:string,
+  city:string,
+  state:string,
+  postal_code:string,
+  country:string
+};
+export interface CartInterface{
+  items:CartItem[];
+  subtotal:number;
+  tax:number;
+  totalQuantity:number;
+};
+
 //order
 export interface Order{
   dateCreated:Date,
   userID:string,
   status:string,
+  orderNum:number,
+  totalAmount:number,
+  cart:CartInterface,
+  shippingAddress:Address,
+  trackingNumber?:string,
+  billingAddress?:Address,
+  giftMessage?:string  
   _id: string // unique id given by mongodb
 };
 
@@ -50,3 +73,9 @@ export interface Membership{
   userID: string,
   _id: string //unique id given by mongodb
 };
+
+export interface PasswordReset{
+  email: string,
+  resetID: string,
+  dateCreated: Date
+}
