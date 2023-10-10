@@ -1,4 +1,4 @@
-import { createNewUser, getUserByEmail, getUserByID } from "@src/controllers/user";
+import { createNewUser, getUserByEmail, getUserByID, updateUserByUserID } from "@src/controllers/user";
 import {Membership, PasswordReset, User} from "@src/interfaces/interfaces";
 import { Router } from "express";
 import bcrypt from 'bcrypt';
@@ -71,6 +71,17 @@ usersRouter.post('/register', async(req,res,next)=>{
     };
     //sign a jwt token for the user so they dont have to sign in again
     const token:string = issueUserJWTToken(UserDoc);
+
+    const mailOptions = {
+      from: 'noreply@nybagelsclub.com',
+      to: email,
+      subject: 'Dear Valued Customer',
+      text: `Welcome to the New York Bagels Club Family. We're truly grateful for your interest in our products, and we can't wait to share our delicious menu with you.`,
+    };
+
+    //send the new user welcome email
+    transporter.sendMail(mailOptions);
+
     res.status(HttpStatusCodes.OK).json({token: token});
   }catch(err){
     console.log(err);
@@ -210,21 +221,47 @@ usersRouter.get('/forgotPassword/:resetID',(req,res,next)=>{
 });
 
 //forgot password update route
-usersRouter.put('/forgotPassword/:resetID',(req,res,next)=>{
+usersRouter.put('/forgotPassword/:resetID', async (req,res,next)=>{
   let isExpired:boolean = true;
   //get id from route
   const resetID:string = req.params.resetID;
   //get token from array
   const foundItem:PasswordReset | undefined = passwordResetTokens.find(item => item.resetID === resetID);
   //determine if token is expired
+  if (foundItem) {
+    const currentTime = new Date(); // Get the current time
+    const tenMinutesAgo = new Date(currentTime.getTime() - 10 * 60 * 1000); // Calculate time 10 minutes ago
+    const dateCreated = new Date(foundItem.dateCreated);
+    isExpired = dateCreated <= tenMinutesAgo;
+  };
   //get password and password conf from req body
+  const password:string = req.body.password;
+  const passwordConf:string = req.body.passwordConf;
   //if passwords match proceed and token is not expired
+  if ((password === passwordConf) && !isExpired && foundItem){
     //get user doc based on email
-    //use bcrypt to hash the new password
-    //update the user doc with the new password
-  //return is expired to user if conditional is not met
-
-  //need to return wasUpdated
+    let tempUserDoc:User | null = await getUserByEmail(foundItem.email);
+    //generate the hashed password
+    const salt:number = 15;
+    const hashedPassword:string = await bcrypt.hash(password,salt);
+    //update the doc locally
+    if (tempUserDoc){
+      tempUserDoc.hashedPassword = hashedPassword;
+      //update the user doc on mongodb
+      await updateUserByUserID(tempUserDoc._id as string,tempUserDoc);
+    };
+    //return status to user
+    res.status(HttpStatusCodes.OK).json({
+      isExpired: isExpired,
+      wasUpdated: true
+    });
+  }else{
+    //token is expired or passwords do not match
+    res.status(HttpStatusCodes.BAD_REQUEST).json({
+      isExpired: isExpired,
+      wasUpdated: false,
+    });
+  };
 });
 
 //get current account info
