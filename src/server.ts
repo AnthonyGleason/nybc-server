@@ -46,7 +46,7 @@ if (EnvVars.NodeEnv === NodeEnvs.Production.valueOf()) {
   app.use(helmet());
 }
 
-// Setup CORS
+// Setup CORS, api security
 const corsOptions = {
   origin: ['http://localhost:3000', 'https://nybagelsclub.com', 'https://www.nybagelsclub.com'], // Allowed client connections
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'], // Allowed methods
