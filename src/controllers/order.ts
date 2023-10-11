@@ -4,17 +4,15 @@ import { OrderModel } from "@src/models/Order";
 //create a new order
 export const createOrder = async function(
   userID:string,
-  orderNum:string,
   totalAmount:number,
   cart:CartInterface,
   shippingAddress:Address,
   trackingNumber?:string,
   billingAddress?:Address,
   giftMessage?:string
-  ){
+  ):Promise<Order>{
   return await OrderModel.create({
     userID: userID,
-    orderNum: orderNum,
     totalAmount:totalAmount,
     cart:cart,
     shippingAddress:shippingAddress,
@@ -25,18 +23,22 @@ export const createOrder = async function(
 };
 
 //update an existing order by orderID
-export const updateOrderByOrderID = async function(updatedOrder:Order,orderID:string){
+export const updateOrderByOrderID = async function(updatedOrder:Order,orderID:string):Promise<Order | null>{
   return await OrderModel.findByIdAndUpdate(orderID,updatedOrder);
 };
 
 //get an existing order by orderID
-export const getOrderByOrderID = async function(orderID:string){
+export const getOrderByOrderID = async function(orderID:string):Promise<Order | null>{
   return await OrderModel.findById(orderID);
 };
 
 //get all orders by userID
-export const getAllOrdersByUserID = async function(userID:string){
+export const getAllOrdersByUserID = async function(userID:string):Promise<Order[] | null>{
   return await OrderModel.find({userID: userID});
+};
+
+export const getAllOrders = async function():Promise<Order[] | null>{
+  return await OrderModel.find({});
 };
 
 //delete an existing order by orderID

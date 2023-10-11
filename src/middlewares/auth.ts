@@ -1,6 +1,8 @@
-import { NextFunction, Response } from "express";
 import jwt from 'jsonwebtoken';
 import { invalidatedTokens } from "@src/helpers/auth";
+import { User } from "@src/interfaces/interfaces";
+import { getUserByID } from "@src/controllers/user";
+import HttpStatusCodes from "@src/constants/HttpStatusCodes";
 
 export const handleCartLoginAuth = function(req: any, res: any, next: any) {
   const authHeader: string | undefined = req.headers.authorization;
@@ -43,6 +45,20 @@ export const authenticateLoginToken = function(req:any, res:any, next:any) {
       next();
     }
   );
+};
+
+//authenticates jwt login tokens
+export const authenticateAdmin = async function(req:any, res:any, next:any) {
+  //get user id from payload
+  const userID:string = req.payload.loginPayload.user._id;
+  //get user doc from mongodb
+  const userDoc:User | null = await getUserByID(userID);
+  //if the user is not apart of admin group then they are unauthorized
+  if (userDoc && userDoc.group==='admin'){
+    next();
+  }else{
+    res.status(HttpStatusCodes.UNAUTHORIZED);
+  }
 };
 
 export const authenticateCartToken = function(req:any,res:any,next:any){

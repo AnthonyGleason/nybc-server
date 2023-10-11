@@ -267,11 +267,70 @@ usersRouter.put('/forgotPassword/:resetID', async (req,res,next)=>{
 //get current account settings
 usersRouter.get('/settings', authenticateLoginToken, async (req:any,res,next)=>{
   const userDoc:User | null = await getUserByID(req.payload.loginPayload.user._id);
+  if (userDoc){
+    res.status(HttpStatusCodes.OK).json({
+      firstName: userDoc.firstName,
+      lastName: userDoc.lastName,
+      email: userDoc.email,
+    });
+  }else{
+    res.status(HttpStatusCodes.NOT_FOUND);
+  }
 });
 
 //update account settings
-usersRouter.put('/settings', authenticateLoginToken, async (req,res,next)=>{
-
+usersRouter.put('/settings', authenticateLoginToken, async (req:any,res,next)=>{
+  //destructure request body
+  const {
+    firstNameInput,
+    lastNameInput,
+    emailInput,
+    passwordInput,
+    passwordConfInput,
+    currentPasswordInput
+  }:{
+    firstNameInput:string,
+    lastNameInput:string,
+    emailInput:string,
+    passwordInput:string,
+    passwordConfInput:string,
+    currentPasswordInput:string
+  } = req.body;
+  //get the user doc
+  const userDoc:User | null = await getUserByID(req.payload.loginPayload.user._id);
+  //if current password was entered correctly
+  if (userDoc && await bcrypt.compare(currentPasswordInput,userDoc.hashedPassword)){
+    //determine which fields were updated and apply those changes to a temp user object
+    let tempUserDoc:User = userDoc;
+    if (firstNameInput) tempUserDoc.firstName = firstNameInput;
+    if (lastNameInput) tempUserDoc.lastName = lastNameInput;
+    //if the email is already in use do not proceed
+    if (!await getUserByEmail(emailInput) && emailInput) tempUserDoc.email = emailInput;
+    //if the password was changed
+    if (passwordInput && passwordConfInput && (passwordInput===passwordConfInput)){
+      //hash the new password and update the updated user doc with it
+      const salt:number = 15;
+      const hashedPassword:string = await bcrypt.hash(passwordInput,salt);
+      tempUserDoc.hashedPassword=hashedPassword;
+    };
+    //invalidate the current user login token
+    invalidatedTokens.push(req.tokens.loginToken);
+    /* 
+      sign a jwt token for the user so they dont have to sign in again
+      we already verified above the user has entered the correct password so 
+      this action can be performed safely.
+    */
+    const token:string = issueUserJWTToken(userDoc);
+    //update the document in mongoDB
+    await updateUserByUserID(userDoc._id as string,tempUserDoc);
+    //respond with wasUserUpdated to client
+    res.status(HttpStatusCodes.OK).json({
+      wasUserUpdated: true,
+      loginToken: token
+    });
+  }else{
+    res.status(HttpStatusCodes.NOT_MODIFIED).json({wasUserUpdated: false});
+  };
 });
 
 export default usersRouter;

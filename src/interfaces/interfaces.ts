@@ -1,4 +1,3 @@
-import Cart from "@src/classes/Cart"
 import mongoose from "mongoose"
 
 //user
@@ -44,6 +43,7 @@ export interface Address{
   postal_code:string,
   country:string
 };
+
 export interface CartInterface{
   items:CartItem[];
   subtotal:number;
@@ -56,14 +56,13 @@ export interface Order{
   dateCreated:Date,
   userID:string,
   status:string,
-  orderNum:number,
   totalAmount:number,
   cart:CartInterface,
   shippingAddress:Address,
   trackingNumber?:string,
   billingAddress?:Address,
   giftMessage?:string  
-  _id: string // unique id given by mongodb
+  _id: string | mongoose.Types.ObjectId // unique id given by mongodb
 };
 
 //membership

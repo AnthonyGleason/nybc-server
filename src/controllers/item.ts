@@ -1,5 +1,5 @@
 import { ItemModel } from "@src/models/Item"
-import {BagelItem, SpreadItem} from '../interfaces/interfaces';
+import { BagelItem, SpreadItem } from '../interfaces/interfaces';
 
 //get shop item by name
 export const getItemByName = async function(itemName:string):Promise<BagelItem | SpreadItem | null>{

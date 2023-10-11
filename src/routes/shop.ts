@@ -7,7 +7,8 @@ import { stripe } from '@src/util/stripe';
 import { authenticateCartToken, authenticateLoginToken, handleCartLoginAuth} from '@src/middlewares/auth';
 import { getMembershipByUserID } from '@src/controllers/membership';
 import { getUserByID } from '@src/controllers/user';
-import { BagelItem, CartItem, Membership, SpreadItem, User } from '@src/interfaces/interfaces';
+import { BagelItem, CartItem, Membership, Order, SpreadItem, User } from '@src/interfaces/interfaces';
+import { getAllOrdersByUserID, getOrderByOrderID } from '@src/controllers/order';
 
 export const shopRouter = Router();
 
@@ -189,7 +190,7 @@ shopRouter.get('/all', async (req,res,next)=>{
 
 //get shop item by item id
 shopRouter.get('/item/:itemID', async (req,res,next)=>{
-  const itemID = req.params.itemID;
+  const itemID:string = req.params.itemID;
   try{
     const item:BagelItem | SpreadItem | null = await getItemByID(itemID);
     if (item){
@@ -204,12 +205,39 @@ shopRouter.get('/item/:itemID', async (req,res,next)=>{
   };
 });
 
+//get order by order id (users)
+shopRouter.get('/orders/:orderID', authenticateLoginToken, async (req:any,res,next)=>{
+  const orderID:string = req.params.orderID;
+  const userID:string = req.payload.loginPayload.user._id;
+  const orderDoc:Order | null = await getOrderByOrderID(orderID);
+  //if a doc was found and user is authorized to access info
+  if (orderDoc && (userID===orderDoc.userID)){
+    res.status(HttpStatusCodes.OK).json({'orderDoc': orderDoc});
+  }
+  //a doc is not found by user
+  else if (!orderDoc){
+    res.status(HttpStatusCodes.NOT_FOUND);
+  }
+  //user is not authorized to access content
+  else{
+    res.status(HttpStatusCodes.UNAUTHORIZED);
+  }
+});
 
-//get order by order id
 //get all orders for user
-//create an order
+shopRouter.get('/orders/', authenticateLoginToken, async (req:any,res,next)=>{
+  const userID:string = req.payload.loginPayload.user._id;
+  const orders:Order[] | null = await getAllOrdersByUserID(userID);
+  if (orders){
+    res.status(HttpStatusCodes.OK).json({orders: orders});
+  }else{
+    res.status(HttpStatusCodes.NOT_FOUND);
+  };
+});
 
-//admin menu
-//get all orders
-//update order status
-//create a shipping label for order
+//create an order
+shopRouter.post('/orders',authenticateLoginToken,async(req:any,res,next)=>{
+  const userID:string = req.payload.loginPayload.user._id;
+  //check if order was paid
+  //get items from stripe items field on order
+});

@@ -1,4 +1,4 @@
-import { Membership, User } from "@src/interfaces/interfaces";
+import { User } from "@src/interfaces/interfaces";
 import { UserModel } from "../models/User";
 
 //get a user by userID
@@ -40,6 +40,10 @@ export const createNewUser = async function(
   return await UserModel.create(userData);
 };
 
+//get all users
+export const getAllUsers = async function():Promise<User[] | null>{
+  return await UserModel.find({});
+}
 //update a user by userID
 export const updateUserByUserID = async function(userID:string,updatedUser:User):Promise<User | null>{
   return await UserModel.findByIdAndUpdate(userID,updatedUser);
