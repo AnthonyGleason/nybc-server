@@ -77,3 +77,8 @@ export interface PasswordReset{
   resetID: string,
   dateCreated: Date
 }
+
+export interface TempCartToken{
+  userID: string,
+  cartToken: string
+}

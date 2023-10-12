@@ -1,13 +1,13 @@
 import Cart from '@src/classes/Cart';
 import HttpStatusCodes from '@src/constants/HttpStatusCodes';
 import { getAllItems, getItemByID } from '@src/controllers/item';
-import { invalidatedTokens, issueCartJWTToken } from '@src/helpers/auth';
+import { invalidatedTokens, issueCartJWTToken, tempCartTokens } from '@src/helpers/auth';
 import { Router } from 'express'
 import { stripe } from '@src/util/stripe';
 import { authenticateCartToken, authenticateLoginToken, handleCartLoginAuth} from '@src/middlewares/auth';
 import { getMembershipByUserID } from '@src/controllers/membership';
 import { getUserByID } from '@src/controllers/user';
-import { Address, BagelItem, CartInterface, CartItem, Membership, Order, SpreadItem, User } from '@src/interfaces/interfaces';
+import { Address, BagelItem, CartInterface, CartItem, Membership, Order, SpreadItem, TempCartToken, User } from '@src/interfaces/interfaces';
 import { createOrder, getAllOrdersByUserID, getOrderByOrderID } from '@src/controllers/order';
 import jwt from 'jsonwebtoken';
 
@@ -47,29 +47,38 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
       const giftMessage = paymentIntentSucceeded.metadata.giftMessage || '';
     
       //get cart token
-      const cartToken:string = paymentIntentSucceeded.metadata.cartToken;
-      //get cart payload from token
-      jwt.verify(
-        cartToken, process.env.SECRET as jwt.Secret,
-        async (err:any, payload:any) => {
-          //an error was found when verifying the bearer token
-          if (err) {
-            return res.status(403).json({
-              isValid: false,
-              message: 'Forbidden',
-            });
-          };
-          let cart:CartInterface = payload;
-          cart.tax = paymentIntentSucceeded.metadata.tax_amount / 100; //convert tax in cents to x.xx 
-          const orderDoc: Order = await createOrder(
-            userID,
-            totalAmount,
-            cart, //parse stringified cart
-            shippingAddress,
-            giftMessage
-          );
-        }
-      );
+      const tempCartToken:TempCartToken | undefined= tempCartTokens.find((tempCartToken:TempCartToken)=>{
+        if (tempCartToken.userID===userID) return true;
+      });
+      
+      if (tempCartToken){
+        const cartToken:string = tempCartToken.cartToken;
+        //remove the array item
+        tempCartTokens.splice(tempCartTokens.indexOf(tempCartToken),1);
+        //get cart payload from token
+        jwt.verify(
+          cartToken, process.env.SECRET as jwt.Secret,
+          async (err:any, payload:any) => {
+            //an error was found when verifying the bearer token
+            if (err) {
+              return res.status(403).json({
+                isValid: false,
+                message: 'Forbidden',
+              });
+            };
+            let cart:CartInterface = payload;
+            cart.tax = paymentIntentSucceeded.metadata.tax_amount / 100; //convert tax in cents to x.xx 
+            const orderDoc: Order = await createOrder(
+              userID,
+              totalAmount,
+              cart, //parse stringified cart
+              shippingAddress,
+              giftMessage
+            );
+          }
+        );
+      }
+     
       break;
     default:
       console.log(`Unhandled event type ${event.type}`);
@@ -150,13 +159,18 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
   //reapply discounts to items
   if (membershipDoc) cart.applyMembershipPricing(membershipDoc.tier);
   cart.calcSubtotal();
+  //store the token temporarily because it is too long to be sent through stripe
+  const tempCartToken:TempCartToken = {
+    cartToken: req.tokens.cart,
+    userID: req.payload.loginPayload.user._id
+  };
+  tempCartTokens.push(tempCartToken);
   //create payment intent
   const paymentIntent = await stripe.paymentIntents.create({
     amount: Math.floor(cart.subtotal * 100),
     currency: 'usd', // Change this to your preferred currency
     metadata:{
-      userID: req.payload.loginPayload.user._id,
-      cartToken: req.tokens.cart
+      userID: req.payload.loginPayload.user._id
     }
   });
   res.json({ paymentIntentToken: paymentIntent.client_secret });
