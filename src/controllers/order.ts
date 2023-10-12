@@ -7,8 +7,6 @@ export const createOrder = async function(
   totalAmount:number,
   cart:CartInterface,
   shippingAddress:Address,
-  trackingNumber?:string,
-  billingAddress?:Address,
   giftMessage?:string
   ):Promise<Order>{
   return await OrderModel.create({
@@ -16,9 +14,7 @@ export const createOrder = async function(
     totalAmount:totalAmount,
     cart:cart,
     shippingAddress:shippingAddress,
-    trackingNumber:trackingNumber,
-    billingAddress:billingAddress,
-    giftMessage:giftMessage,
+    giftMessage:giftMessage
   });
 };
 

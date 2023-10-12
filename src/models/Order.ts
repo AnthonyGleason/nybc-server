@@ -29,11 +29,7 @@ const OrderSchema = new mongoose.Schema({
     required: true,
   },
   trackingNumber:{
-    type: String,
-    required: true
-  },
-  billingAddress:{
-    type: Object,
+    type: String
   },
   giftMessage:{
     type: String,

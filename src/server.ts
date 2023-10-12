@@ -8,7 +8,7 @@ import path from 'path';
 import helmet from 'helmet';
 import express, { Request, Response, NextFunction } from 'express';
 import logger from 'jet-logger';
-
+import bodyParser from 'body-parser';
 import 'express-async-errors';
 
 //setup enviornment variables
@@ -32,6 +32,13 @@ const app = express();
 // **** Setup **** //
 
 // Basic middleware
+app.use(
+  bodyParser.json({
+      verify: function(req:any, res, buf) {
+          req.rawBody = buf; //assign the rawBody so it can be used in stripe webhooks
+      }
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
 app.use(cookieParser(EnvVars.CookieProps.Secret));

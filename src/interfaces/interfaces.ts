@@ -60,7 +60,6 @@ export interface Order{
   cart:CartInterface,
   shippingAddress:Address,
   trackingNumber?:string,
-  billingAddress?:Address,
   giftMessage?:string  
   _id: string | mongoose.Types.ObjectId // unique id given by mongodb
 };

@@ -7,10 +7,62 @@ import { stripe } from '@src/util/stripe';
 import { authenticateCartToken, authenticateLoginToken, handleCartLoginAuth} from '@src/middlewares/auth';
 import { getMembershipByUserID } from '@src/controllers/membership';
 import { getUserByID } from '@src/controllers/user';
-import { BagelItem, CartItem, Membership, Order, SpreadItem, User } from '@src/interfaces/interfaces';
-import { getAllOrdersByUserID, getOrderByOrderID } from '@src/controllers/order';
+import { Address, BagelItem, CartInterface, CartItem, Membership, Order, SpreadItem, User } from '@src/interfaces/interfaces';
+import { createOrder, getAllOrdersByUserID, getOrderByOrderID } from '@src/controllers/order';
 
 export const shopRouter = Router();
+
+shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
+  // https://dashboard.stripe.com/webhooks/create?endpoint_location=local
+
+  const sig = req.headers['stripe-signature'];
+  // This is your Stripe CLI webhook secret for testing your endpoint locally.
+  const endpointSecret = "whsec_88082d4d3fe75a4e116096a7f15df729d007de27bd133ac483d7f2c5bf7a342b";
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret); //req.rawBody is assigned through middleware in server.js
+  } catch (err) {
+    console.log(err)
+    res.status(400).send(`Webhook Error: ${err.message}`);
+    return;
+  }
+
+  // Handle the event
+  switch (event.type) {
+    case 'payment_intent.succeeded':
+      const paymentIntentSucceeded = event.data.object;
+      //create an order doc
+      const userID:string = paymentIntentSucceeded.metadata.userID;
+      const totalAmount:number = paymentIntentSucceeded.amount;
+      const shippingAddress:Address = {
+        line1: paymentIntentSucceeded.shipping.address.line1,
+        line2: paymentIntentSucceeded.shipping.address.line2 || undefined,
+        city: paymentIntentSucceeded.shipping.address.city,
+        state: paymentIntentSucceeded.shipping.address.state,
+        postal_code: paymentIntentSucceeded.shipping.address.postal_code,
+        country: paymentIntentSucceeded.shipping.address.country
+      }; 
+      const giftMessage = paymentIntentSucceeded.metadata.giftMessage || '';
+      const cart:string = paymentIntentSucceeded.metadata.cart; //cart was stringified
+      //add the final charged tax amount
+      let parsedCart:CartInterface = JSON.parse(cart) as CartInterface;
+      parsedCart.tax = paymentIntentSucceeded.metadata.tax_amount / 100; //convert tax in cents to x.xx 
+      const orderDoc: Order = await createOrder(
+        userID,
+        totalAmount,
+        parsedCart, //parse stringified cart
+        shippingAddress,
+        giftMessage
+      );
+      break;
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
+
+  // Return a 200 response to acknowledge receipt of the event
+  res.send();
+});
 
 shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authenticateCartToken, async(req:any,res,next)=>{
   const cart:Cart = new Cart(req.payload.cartPayload.cart.items);
@@ -50,13 +102,19 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   if (paymentID) {
     paymentIntent = await stripe.paymentIntents.update(paymentID, {
       amount: calculation.amount_total,
-      metadata: {tax_calculation: calculation.id},
+      metadata: {
+        tax_calculation: calculation.id,
+        tax_amount: calculation.tax_amount_exclusive
+      },
     });
   } else {
     paymentIntent = await stripe.paymentIntents.create({
       currency: 'usd',
       amount: calculation.amount_total,
-      metadata: {tax_calculation: calculation.id},
+      metadata: {
+        tax_calculation: calculation.id,
+        tax_amount: calculation.tax_amount_exclusive
+      },
       // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
       automatic_payment_methods: {enabled: true},
     });
@@ -69,7 +127,7 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
 });
 
 shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticateLoginToken,async (req:any,res,next)=>{
-  let cart:Cart = new Cart(req.payload.cartPayload.cart.items);  
+  let cart:Cart = new Cart(req.payload.cartPayload.cart.items);
   //get membership level for user
   const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
   //perform cleanup and verification
@@ -82,6 +140,10 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
   const paymentIntent = await stripe.paymentIntents.create({
     amount: Math.floor(cart.subtotal * 100),
     currency: 'usd', // Change this to your preferred currency
+    metadata:{
+      userID: req.payload.loginPayload.user._id,
+      cart: JSON.stringify(cart) //stringified so the request can be made
+    }
   });
   res.json({ paymentIntentToken: paymentIntent.client_secret });
 });
