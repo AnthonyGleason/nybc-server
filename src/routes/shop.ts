@@ -17,7 +17,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
 
   const sig = req.headers['stripe-signature'];
   // This is your Stripe CLI webhook secret for testing your endpoint locally.
-  const endpointSecret = "whsec_88082d4d3fe75a4e116096a7f15df729d007de27bd133ac483d7f2c5bf7a342b";
+  const endpointSecret:string | undefined = process.env.STRIPE_SIGNING_SECRET;
 
   let event;
   try {
@@ -295,11 +295,4 @@ shopRouter.get('/orders/', authenticateLoginToken, async (req:any,res,next)=>{
   }else{
     res.status(HttpStatusCodes.NOT_FOUND);
   };
-});
-
-//create an order
-shopRouter.post('/orders',authenticateLoginToken,async(req:any,res,next)=>{
-  const userID:string = req.payload.loginPayload.user._id;
-  //check if order was paid
-  //get items from stripe items field on order
 });

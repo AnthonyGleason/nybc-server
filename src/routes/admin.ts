@@ -7,6 +7,10 @@ import {Router} from 'express';
 //admin menu
 const adminRouter = Router();
 
+adminRouter.get('/verifyAdmin',authenticateLoginToken,authenticateAdmin,async(req,res,next)=>{
+  res.status(200).json({isAdmin: true});
+});
+
 //get order data by order ID
 adminRouter.get('/orders/:userID/:orderID', authenticateLoginToken,authenticateAdmin, async (req:any,res,next)=>{
   const orderID:string = req.params.orderID;
