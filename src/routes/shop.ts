@@ -9,6 +9,7 @@ import { getMembershipByUserID } from '@src/controllers/membership';
 import { getUserByID } from '@src/controllers/user';
 import { Address, BagelItem, CartInterface, CartItem, Membership, Order, SpreadItem, User } from '@src/interfaces/interfaces';
 import { createOrder, getAllOrdersByUserID, getOrderByOrderID } from '@src/controllers/order';
+import jwt from 'jsonwebtoken';
 
 export const shopRouter = Router();
 
@@ -44,22 +45,35 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
         country: paymentIntentSucceeded.shipping.address.country
       }; 
       const giftMessage = paymentIntentSucceeded.metadata.giftMessage || '';
-      const cart:string = paymentIntentSucceeded.metadata.cart; //cart was stringified
-      //add the final charged tax amount
-      let parsedCart:CartInterface = JSON.parse(cart) as CartInterface;
-      parsedCart.tax = paymentIntentSucceeded.metadata.tax_amount / 100; //convert tax in cents to x.xx 
-      const orderDoc: Order = await createOrder(
-        userID,
-        totalAmount,
-        parsedCart, //parse stringified cart
-        shippingAddress,
-        giftMessage
+    
+      //get cart token
+      const cartToken:string = paymentIntentSucceeded.metadata.cartToken;
+      //get cart payload from token
+      jwt.verify(
+        cartToken, process.env.SECRET as jwt.Secret,
+        async (err:any, payload:any) => {
+          //an error was found when verifying the bearer token
+          if (err) {
+            return res.status(403).json({
+              isValid: false,
+              message: 'Forbidden',
+            });
+          };
+          let cart:CartInterface = payload;
+          cart.tax = paymentIntentSucceeded.metadata.tax_amount / 100; //convert tax in cents to x.xx 
+          const orderDoc: Order = await createOrder(
+            userID,
+            totalAmount,
+            cart, //parse stringified cart
+            shippingAddress,
+            giftMessage
+          );
+        }
       );
       break;
     default:
       console.log(`Unhandled event type ${event.type}`);
-  }
-
+  };
   // Return a 200 response to acknowledge receipt of the event
   res.send();
 });
@@ -142,7 +156,7 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
     currency: 'usd', // Change this to your preferred currency
     metadata:{
       userID: req.payload.loginPayload.user._id,
-      cart: JSON.stringify(cart) //stringified so the request can be made
+      cartToken: req.tokens.cart
     }
   });
   res.json({ paymentIntentToken: paymentIntent.client_secret });
