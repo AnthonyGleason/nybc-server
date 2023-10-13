@@ -32,14 +32,14 @@ usersRouter.post('/register', async(req,res,next)=>{
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
 
-  //verify provided passwords match
+  
   try{
+    //verify provided passwords match
     if (password!==passwordConfirm) throw new Error('Passwords do not match.');
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   }
 
-  //attempt to hash the password
   try{
     //generate the hashed password
     hashedPassword = await bcrypt.hash(password,salt);
@@ -47,8 +47,8 @@ usersRouter.post('/register', async(req,res,next)=>{
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
 
-  //verify the email is not taken by another user
   try{
+    //verify the email is not taken by another user
     if (await getUserByEmail(email)) throw new Error('An account with that email already exists.');
   }catch(err){
     handleError(res,HttpStatusCodes.CONFLICT,err);
@@ -65,12 +65,16 @@ usersRouter.post('/register', async(req,res,next)=>{
       new Date(),
       false,
     );
+
     //create a membership document for the new user
     await createMembership(UserDoc._id.toString());
+
     //sign a jwt token for the user so they dont have to sign in again
     const token:string = issueUserJWTToken(UserDoc);
+
     //send the new user welcome email
     await transporter.sendMail(getNewRegistrationMailOptions(email));
+
     res.status(HttpStatusCodes.OK).json({token: token});
   }catch(err){
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
@@ -123,6 +127,7 @@ usersRouter.get('/verify', authenticateLoginToken,(req,res,next)=>{
 usersRouter.get('/membershipLevel', authenticateLoginToken, async (req:any,res,next)=>{
   //get userID
   const userID:string = req.payload.loginPayload.user._id;
+
   try{
     //get membership level
     const membershipDoc:Membership | null = await getMembershipByUserID(userID);
@@ -140,6 +145,7 @@ usersRouter.post('/forgotPassword', async(req:any,res,next)=>{
     const userEmail:string | undefined = req.body.email;
     //an email was not provided by the user
     if (!userEmail) throw new Error('A user email was not provided.');
+
     //send password reset email
     await transporter.sendMail(getPasswordResetMailOptions(userEmail));
     res.status(HttpStatusCodes.OK).json({isEmailSent: true});
@@ -173,59 +179,81 @@ usersRouter.get('/forgotPassword/:resetID',(req,res,next)=>{
 //forgot password update route
 usersRouter.put('/forgotPassword/:resetID', async (req,res,next)=>{
   let isExpired:boolean = true;
-  //get id from route
+  let foundItem:PasswordReset | undefined;
+  let userDoc:User | null = null;
+
   const resetID:string = req.params.resetID;
-  //get token from array
-  const foundItem:PasswordReset | undefined = passwordResetTokens.find(item => item.resetID === resetID);
-  //determine if token is expired
-  if (foundItem) {
+  //get password and password conf from req body
+  const password:string = req.body.password;
+  const passwordConf:string = req.body.passwordConf;
+
+  try{  
+    //attempt to get token from array
+    foundItem = passwordResetTokens.find(item => item.resetID === resetID);
+    if (!foundItem) throw new Error('Password reset item not found. Please make another password reset request to proceed.');
+
+    //determine if token is expired
     const currentTime = new Date(); // Get the current time
     const tenMinutesAgo = new Date(currentTime.getTime() - 10 * 60 * 1000); // Calculate time 10 minutes ago
     const dateCreated = new Date(foundItem.dateCreated);
     isExpired = dateCreated <= tenMinutesAgo;
-  };
-  //get password and password conf from req body
-  const password:string = req.body.password;
-  const passwordConf:string = req.body.passwordConf;
-  //if passwords match proceed and token is not expired
-  if ((password === passwordConf) && !isExpired && foundItem){
+
     //get user doc based on email
-    let tempUserDoc:User | null = await getUserByEmail(foundItem.email);
-    //generate the hashed password
-    const salt:number = 15;
-    const hashedPassword:string = await bcrypt.hash(password,salt);
+    userDoc = await getUserByEmail(foundItem.email);
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  };
+
+  try{
+    if (password!==passwordConf) throw new Error('Provided passwords do not match.');
+  }catch(err){
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
+  };
+
+  try{
+    if (!isExpired) throw new Error('The password reset link is expired.');
+  }catch(err){
+    handleError(res,HttpStatusCodes.UNAUTHORIZED,err);
+  };
+
+  try{
     //update the doc locally
-    if (tempUserDoc){
-      tempUserDoc.hashedPassword = hashedPassword;
-      //update the user doc on mongodb
-      await updateUserByUserID(tempUserDoc._id as string,tempUserDoc);
-    };
+    if (!userDoc) throw new Error('A user doc was not found');
+
+    //generate the hashed password
+    const hashedPassword:string = await bcrypt.hash(password,salt);
+    userDoc.hashedPassword = hashedPassword;
+    
+    //update the user doc on mongodb
+    await updateUserByUserID(userDoc._id as string,userDoc);
+
     //return status to user
     res.status(HttpStatusCodes.OK).json({
       isExpired: isExpired,
       wasUpdated: true
     });
-  }else{
-    //token is expired or passwords do not match
-    res.status(HttpStatusCodes.BAD_REQUEST).json({
-      isExpired: isExpired,
-      wasUpdated: false,
-    });
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
 });
 
 //get current account settings
 usersRouter.get('/settings', authenticateLoginToken, async (req:any,res,next)=>{
-  const userDoc:User | null = await getUserByID(req.payload.loginPayload.user._id);
-  if (userDoc){
+  try{
+    //attempt to get a user doc for the provided jwt token
+    const userDoc:User | null = await getUserByID(req.payload.loginPayload.user._id);
+
+    //handle user doc was not found
+    if (!userDoc) throw new Error('A user doc was not found.');
+
     res.status(HttpStatusCodes.OK).json({
       firstName: userDoc.firstName,
       lastName: userDoc.lastName,
       email: userDoc.email,
     });
-  }else{
-    res.status(HttpStatusCodes.NOT_FOUND);
-  }
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  };
 });
 
 //update account settings
@@ -246,40 +274,81 @@ usersRouter.put('/settings', authenticateLoginToken, async (req:any,res,next)=>{
     passwordConfInput:string,
     currentPasswordInput:string
   } = req.body;
-  //get the user doc
-  const userDoc:User | null = await getUserByID(req.payload.loginPayload.user._id);
-  //if current password was entered correctly
-  if (userDoc && await bcrypt.compare(currentPasswordInput,userDoc.hashedPassword)){
-    //determine which fields were updated and apply those changes to a temp user object
-    let tempUserDoc:User = userDoc;
-    if (firstNameInput) tempUserDoc.firstName = firstNameInput;
-    if (lastNameInput) tempUserDoc.lastName = lastNameInput;
-    //if the email is already in use do not proceed
-    if (!await getUserByEmail(emailInput) && emailInput) tempUserDoc.email = emailInput;
-    //if the password was changed
-    if (passwordInput && passwordConfInput && (passwordInput===passwordConfInput)){
-      //hash the new password and update the updated user doc with it
-      const salt:number = 15;
-      const hashedPassword:string = await bcrypt.hash(passwordInput,salt);
-      tempUserDoc.hashedPassword=hashedPassword;
+
+  let passwordMatch:boolean = false;
+  let userDoc:User | null = null;
+
+  try{
+    //verify all required fields were provided
+    if (
+      !currentPasswordInput 
+    ) throw new Error('The current password input was left blank. It is required to make any changes to the current account.');
+
+    //a password update was initiated but the required fields were not provided
+    if (
+      !passwordInput ||
+      !passwordConfInput
+    ) throw new Error('A password update was requested but the required fields to update the user password were not provided.');
+  }catch(err){
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
+  };
+
+  try{
+    //get the user doc
+    userDoc = await getUserByID(req.payload.loginPayload.user._id);
+    if (!userDoc) throw new Error('A user was not found for the login token.');
+
+    //ensure password matches the user doc hashed password
+    try{
+      passwordMatch = await bcrypt.compare(currentPasswordInput,userDoc.hashedPassword);
+      if (!passwordMatch) throw new Error('The provided password is incorrect.');
+    }catch(err){
+      handleError(res,HttpStatusCodes.UNAUTHORIZED,err);
     };
-    //invalidate the current user login token
-    invalidatedTokens.push(req.tokens.loginToken);
-    /* 
-      sign a jwt token for the user so they dont have to sign in again
-      we already verified above the user has entered the correct password so 
-      this action can be performed safely.
-    */
-    const token:string = issueUserJWTToken(userDoc);
-    //update the document in mongoDB
-    await updateUserByUserID(userDoc._id as string,tempUserDoc);
-    //respond with wasUserUpdated to client
-    res.status(HttpStatusCodes.OK).json({
-      wasUserUpdated: true,
-      loginToken: token
-    });
-  }else{
-    res.status(HttpStatusCodes.NOT_MODIFIED).json({wasUserUpdated: false});
+
+    try{
+      //if the email is already in use do not proceed
+      if (await getUserByEmail(emailInput)) throw new Error('An account already exists with that email.');
+    }catch(err){
+      handleError(res,HttpStatusCodes.CONFLICT,err);
+    };
+
+    try{
+      //if the password was changed
+      if (passwordInput !== passwordConfInput) throw new Error('Password inputs do not match.');
+      //hash the new password and update the updated user doc with it
+      const hashedPassword:string = await bcrypt.hash(passwordInput,salt);
+      userDoc.hashedPassword=hashedPassword;
+    }catch(err){
+      handleError(res,HttpStatusCodes.BAD_REQUEST,err);
+    };
+
+    //determine which fields were updated and apply those changes to a temp user object
+    userDoc.firstName = firstNameInput;
+    userDoc.lastName = lastNameInput;
+    userDoc.email = emailInput;
+
+    try{
+      //invalidate the current user login token
+      invalidatedTokens.push(req.tokens.loginToken);
+      
+      // sign a jwt token for the user so they dont have to sign in again
+      const token:string = issueUserJWTToken(userDoc);
+
+      //update the document in mongoDB
+      const updatedUser:User | null = await updateUserByUserID(userDoc._id as string,userDoc);
+      if (!updatedUser) throw new Error('An error has occured when updating the user settings, no changes to your account were made.');
+
+      //respond with wasUserUpdated to client
+      res.status(HttpStatusCodes.OK).json({
+        wasUserUpdated: true,
+        loginToken: token
+      });
+    }catch(err){
+      handleError(res,HttpStatusCodes.NOT_MODIFIED,err);
+    };
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
 });
 
