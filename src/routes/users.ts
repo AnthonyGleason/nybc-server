@@ -7,6 +7,9 @@ import { invalidatedTokens, issueUserJWTToken, passwordResetTokens } from "@src/
 import { createMembership, getMembershipByUserID } from "@src/controllers/membership";
 import { authenticateLoginToken } from "@src/middlewares/auth";
 import { transporter } from "@src/server";
+import { salt } from "@src/constants/auth";
+import { handleError } from "@src/helpers/error";
+import { getNewRegistrationMailOptions } from "@src/constants/emails";
 
 const usersRouter = Router();
 
@@ -20,33 +23,35 @@ usersRouter.post('/register', async(req,res,next)=>{
     password,
     passwordConfirm
   } = req.body;
-
-  //generate the hashed password
-  const salt:number = 15;
-  const hashedPassword:string = await bcrypt.hash(password,salt);
+  let hashedPassword:string = '';
 
   //verify required fields are provided
   try{
-    if (!firstName || !lastName || !email || !hashedPassword) throw new Error('Required fields are missing.');
+    if (!firstName || !lastName || !email || !hashedPassword) throw new Error('All required fields must be completed.');
   }catch(err){
-    console.log(err);
-    res.status(HttpStatusCodes.BAD_REQUEST).json({message: err});
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
 
-  //verify passwords match
+  //verify provided passwords match
   try{
     if (password!==passwordConfirm) throw new Error('Passwords do not match.');
   }catch(err){
-    console.log(err);
-    res.status(HttpStatusCodes.BAD_REQUEST).json({message: err});
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   }
+
+  //attempt to hash the password
+  try{
+    //generate the hashed password
+    hashedPassword = await bcrypt.hash(password,salt);
+  }catch(err){
+    handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
+  };
 
   //verify the email is not taken by another user
   try{
     if (await getUserByEmail(email)) throw new Error('An account with that email already exists.');
   }catch(err){
-    console.log(err);
-    res.status(HttpStatusCodes.CONFLICT).json({message: err});
+    handleError(res,HttpStatusCodes.CONFLICT,err);
   };
 
   //attempt to create a new user
@@ -60,70 +65,54 @@ usersRouter.post('/register', async(req,res,next)=>{
       new Date(),
       false,
     );
-    //user does not exist
-    if (!UserDoc) throw new Error('An error occured when creating a user, please try again later.');
     //create a membership document for the new user
-    try{
-      await createMembership(UserDoc._id.toString());
-    }catch(err){
-      console.log(err);
-      res.status(HttpStatusCodes.INTERNAL_SERVER_ERROR);
-    };
+    await createMembership(UserDoc._id.toString());
     //sign a jwt token for the user so they dont have to sign in again
     const token:string = issueUserJWTToken(UserDoc);
-
-    const mailOptions = {
-      from: 'noreply@nybagelsclub.com',
-      to: email,
-      subject: 'Dear Valued Customer',
-      text: `Welcome to the New York Bagels Club Family. We're truly grateful for your interest in our products, and we can't wait to share our delicious menu with you.`,
-    };
-
     //send the new user welcome email
-    transporter.sendMail(mailOptions);
-
+    transporter.sendMail(getNewRegistrationMailOptions(email));
     res.status(HttpStatusCodes.OK).json({token: token});
   }catch(err){
-    console.log(err);
-    res.status(HttpStatusCodes.INTERNAL_SERVER_ERROR).json({message: err});
+    handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
 });
 
-//attempt to login an existing user
+//login an existing user
 usersRouter.post('/login', async (req,res,next)=>{
   const {
     email,
     password
   } = req.body;
-  let UserDoc:User | null;
   //attempt to fetch user doc from mongodb
   try{
     //get the user from mongoDB by email
-    UserDoc = await getUserByEmail(email);
-    if (!UserDoc) throw new Error('Account does not exist.');
+    const UserDoc = await getUserByEmail(email);
+    if (!UserDoc) throw new Error('Account does not exist for the provided email.');
+
     //verify user has entered correct details
     try{
-      if (await bcrypt.compare(password,UserDoc.hashedPassword)){
-        //sign a jwt token for the user
-        const token:string = issueUserJWTToken(UserDoc);
-        res.status(HttpStatusCodes.OK).json({token: token});
-      }else{
-        throw new Error('The entered password is incorrect.');
-      };
+      //compare the hashed password to the password input provided by the user
+      const passwordMatch:boolean = await bcrypt.compare(password,UserDoc.hashedPassword);
+      if (!passwordMatch) throw new Error('The entered password is incorrect.');
+
+      //sign a jwt token for the user
+      const token:string = issueUserJWTToken(UserDoc);
+      res.status(HttpStatusCodes.OK).json({token: token});
     }catch(err){
-      console.log(err);
-      res.status(HttpStatusCodes.UNAUTHORIZED).json({message: err})
+      handleError(res,HttpStatusCodes.UNAUTHORIZED,err);
     };
   }catch(err){
-    console.log(err);
-    res.status(HttpStatusCodes.NOT_FOUND).json({message: err});
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
 });
 
 usersRouter.post('/logout', authenticateLoginToken, (req:any,res,next)=>{
-  if (req.tokens){
+  try{
+    if (!req.tokens) throw new Error('The request is missing a token to logout. You may already be signed out.');
     invalidatedTokens.push(req.tokens.loginToken);
     res.status(HttpStatusCodes.OK).json({message: 'You have been succesfully logged out.'})
+  }catch(err){
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
 });
 

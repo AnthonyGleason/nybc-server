@@ -33,6 +33,11 @@ export const getAllOrdersByUserID = async function(userID:string):Promise<Order[
   return await OrderModel.find({userID: userID});
 };
 
+//get all pending orders
+export const getAllPendingOrders = async function():Promise<Order[] | null>{
+  return await OrderModel.find({status: 'Pending'});
+};
+
 export const getAllOrders = async function():Promise<Order[] | null>{
   return await OrderModel.find({});
 };

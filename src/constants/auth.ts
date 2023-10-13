@@ -1,0 +1,1 @@
+export const salt:number = 15;
