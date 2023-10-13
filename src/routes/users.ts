@@ -9,7 +9,7 @@ import { authenticateLoginToken } from "@src/middlewares/auth";
 import { transporter } from "@src/server";
 import { salt } from "@src/constants/auth";
 import { handleError } from "@src/helpers/error";
-import { getNewRegistrationMailOptions } from "@src/constants/emails";
+import { getNewRegistrationMailOptions, getPasswordResetMailOptions } from "@src/constants/emails";
 
 const usersRouter = Router();
 
@@ -70,7 +70,7 @@ usersRouter.post('/register', async(req,res,next)=>{
     //sign a jwt token for the user so they dont have to sign in again
     const token:string = issueUserJWTToken(UserDoc);
     //send the new user welcome email
-    transporter.sendMail(getNewRegistrationMailOptions(email));
+    await transporter.sendMail(getNewRegistrationMailOptions(email));
     res.status(HttpStatusCodes.OK).json({token: token});
   }catch(err){
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
@@ -123,90 +123,51 @@ usersRouter.get('/verify', authenticateLoginToken,(req,res,next)=>{
 usersRouter.get('/membershipLevel', authenticateLoginToken, async (req:any,res,next)=>{
   //get userID
   const userID:string = req.payload.loginPayload.user._id;
-  //get membership level
-  const membershipDoc:Membership | null = await getMembershipByUserID(userID);
-  //return it to the client if it exists
-  if (membershipDoc){
+  try{
+    //get membership level
+    const membershipDoc:Membership | null = await getMembershipByUserID(userID);
+    if (!membershipDoc) throw new Error('A membership level was not found for the provided user.');
     res.status(HttpStatusCodes.OK).json({membershipLevel: membershipDoc.tier});
-  }else{
-    res.status(HttpStatusCodes.NOT_FOUND).json({message: 'Membership information not found.'});
+  }catch(err){
+    //a membership doc was not found so therefore we will set it as a Non-Member
+    res.status(HttpStatusCodes.NOT_FOUND).json({membershipLevel: 'Non-Member'});
   };
 });
 
 //send forgot password email
 usersRouter.post('/forgotPassword', async(req:any,res,next)=>{
-  const userEmail:string = req.body.email;
-  const getRandomString = function(length: number) {
-    let counter: number = length;
-    let string: string = '';
-    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890';
-    while (counter > 0) {
-      string += charset.charAt(Math.floor(Math.random() * charset.length));
-      counter--;
-    }
-    return string;
-  };
-
-  const randomString:string = getRandomString(50);
-  const url:string = `https://nybagelsclub.com/accounts/password/reset/${randomString}`;
-  if (userEmail){
-    const mailOptions = {
-      from: 'noreply@nybagelsclub.com',
-      to: userEmail,
-      subject: 'Forgot Password',
-      text: `We have received a request to update your account password. If you initiated this action and wish to proceed with resetting your password, please click on the securely generated link: ${url}. Please note that this link will expire in 10 minutes for security purposes.`,
-    };
-  
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.log(error);
-        res.status(HttpStatusCodes.INTERNAL_SERVER_ERROR).json({isEmailSent: false});
-      } else {
-        //no errors email was sent
-
-        //create the password reset object
-        const passwordReset:PasswordReset = {
-          dateCreated: new Date(),
-          resetID: randomString,
-          email: userEmail
-        };
-        
-        //if the passwordResetTokens array is not empty check to see if there are any current pending tokens for the email and remove them
-        if (passwordResetTokens.length>0){
-          for (let i = passwordResetTokens.length - 1; i >= 0; i--) {
-            if (passwordResetTokens[i].email === userEmail) {
-              passwordResetTokens.splice(i, 1);
-            };
-          };     
-        };
-
-        passwordResetTokens.push(passwordReset);
-        res.status(HttpStatusCodes.OK).json({isEmailSent: true});
-      };
-    });
-  }else{
-    res.status(HttpStatusCodes.NOT_FOUND).json({isEmailSent: false});
+  try{
+    const userEmail:string | undefined = req.body.email;
+    //an email was not provided by the user
+    if (!userEmail) throw new Error('A user email was not provided.');
+    //send password reset email
+    await transporter.sendMail(getPasswordResetMailOptions(userEmail));
+    res.status(HttpStatusCodes.OK).json({isEmailSent: true});
+  }catch(err){
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
 });
 
 //get forgot password status
 usersRouter.get('/forgotPassword/:resetID',(req,res,next)=>{
   let isExpired:boolean = true;
-  //get id from route
   const resetID:string = req.params.resetID;
-  //find the password reset item
-  const foundItem:PasswordReset | undefined = passwordResetTokens.find(item => item.resetID === resetID);
-  //send the user its expired status
-  if (foundItem) {
+
+  try{
+    //find the password reset item
+    const foundItem:PasswordReset | undefined = passwordResetTokens.find(item => item.resetID === resetID);
+    if (!foundItem) throw new Error('Password reset item not found. Please make another password reset request to proceed.');
+    
+    //calculate expired status
     const currentTime = new Date(); // Get the current time
     const tenMinutesAgo = new Date(currentTime.getTime() - 10 * 60 * 1000); // Calculate time 10 minutes ago
     const dateCreated = new Date(foundItem.dateCreated);
     isExpired = dateCreated <= tenMinutesAgo;
+    
     res.status(HttpStatusCodes.OK).json({isExpired: isExpired});
-  } else {
-    // No item with the matching email was found
-    res.status(HttpStatusCodes.NOT_FOUND).json({isExpired: isExpired});
-  }; 
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  };
 });
 
 //forgot password update route
