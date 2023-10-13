@@ -10,81 +10,92 @@ import { getUserByID } from '@src/controllers/user';
 import { Address, BagelItem, CartInterface, CartItem, Membership, Order, SpreadItem, TempCartToken, User } from '@src/interfaces/interfaces';
 import { createOrder, getAllOrdersByUserID, getOrderByOrderID } from '@src/controllers/order';
 import jwt from 'jsonwebtoken';
+import { handleError } from '@src/helpers/error';
 
 export const shopRouter = Router();
 
+// relevant documentation for the below webhook route, https://dashboard.stripe.com/webhooks/create?endpoint_location=local
 shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
-  // https://dashboard.stripe.com/webhooks/create?endpoint_location=local
-
   const sig = req.headers['stripe-signature'];
-  // This is your Stripe CLI webhook secret for testing your endpoint locally.
   const endpointSecret:string | undefined = process.env.STRIPE_SIGNING_SECRET;
-
   let event;
+
   try {
+    //catch any errors that occur when constructing the webhook event (such as wrong body format, too many characters etc...)
     event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret); //req.rawBody is assigned through middleware in server.js
   } catch (err) {
-    console.log(err)
-    res.status(400).send(`Webhook Error: ${err.message}`);
-    return;
-  }
-
-  // Handle the event
-  switch (event.type) {
-    case 'payment_intent.succeeded':
-      const paymentIntentSucceeded = event.data.object;
-      //create an order doc
-      const userID:string = paymentIntentSucceeded.metadata.userID;
-      const totalAmount:number = paymentIntentSucceeded.amount;
-      const shippingAddress:Address = {
-        line1: paymentIntentSucceeded.shipping.address.line1,
-        line2: paymentIntentSucceeded.shipping.address.line2 || undefined,
-        city: paymentIntentSucceeded.shipping.address.city,
-        state: paymentIntentSucceeded.shipping.address.state,
-        postal_code: paymentIntentSucceeded.shipping.address.postal_code,
-        country: paymentIntentSucceeded.shipping.address.country
-      }; 
-      const giftMessage = paymentIntentSucceeded.metadata.giftMessage || '';
-    
-      //get cart token
-      const tempCartToken:TempCartToken | undefined= tempCartTokens.find((tempCartToken:TempCartToken)=>{
-        if (tempCartToken.userID===userID) return true;
-      });
-      
-      if (tempCartToken){
-        const cartToken:string = tempCartToken.cartToken;
-        //remove the array item
-        tempCartTokens.splice(tempCartTokens.indexOf(tempCartToken),1);
-        //get cart payload from token
-        jwt.verify(
-          cartToken, process.env.SECRET as jwt.Secret,
-          async (err:any, payload:any) => {
-            //an error was found when verifying the bearer token
-            if (err) {
-              return res.status(403).json({
-                isValid: false,
-                message: 'Forbidden',
-              });
-            };
-            let cart:CartInterface = payload;
-            cart.tax = paymentIntentSucceeded.metadata.tax_amount / 100; //convert tax in cents to x.xx 
-            const orderDoc: Order = await createOrder(
-              userID,
-              totalAmount,
-              cart, //parse stringified cart
-              shippingAddress,
-              giftMessage
-            );
-          }
-        );
-      }
-     
-      break;
-    default:
-      console.log(`Unhandled event type ${event.type}`);
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
+  
+  try{
+    //ensure the payment intent is the correct type
+    const paymentIntentSucceeded = event.data.object;
+    if (event.type!=='payment_intent.succeeded') throw new Error('This route only handles succeeded payments.');
+
+    //get required properties to create the order doc from the payment intent
+    const userID:string = paymentIntentSucceeded.metadata.userID;
+    const totalAmount:number = paymentIntentSucceeded.amount;
+    const shippingAddress:Address = {
+      line1: paymentIntentSucceeded.shipping.address.line1,
+      line2: paymentIntentSucceeded.shipping.address.line2 || undefined,
+      city: paymentIntentSucceeded.shipping.address.city,
+      state: paymentIntentSucceeded.shipping.address.state,
+      postal_code: paymentIntentSucceeded.shipping.address.postal_code,
+      country: paymentIntentSucceeded.shipping.address.country
+    }; 
+    const giftMessage = paymentIntentSucceeded.metadata.giftMessage || '';
+    
+    //get cart token from memory
+    let tempCartToken:TempCartToken | undefined= tempCartTokens.find((tempCartToken:TempCartToken)=>{
+      if (tempCartToken.userID===userID) return true;
+    });
+
+    //validate all required fields were provided
+    if (!tempCartToken||!shippingAddress||!totalAmount) throw new Error('One or more of the required fields were not provided.');
+
+    //remove the array item from memory
+    tempCartTokens.splice(tempCartTokens.indexOf(tempCartToken),1);
+
+    //get cart payload from token
+    let cart:CartInterface | undefined;
+    jwt.verify(
+      tempCartToken.cartToken, process.env.SECRET as jwt.Secret,
+      async (err:any, payload:any) => {
+        //an error was found when verifying the bearer token
+        if (err) {
+          return res.status(403).json({
+            isValid: false,
+            message: 'Forbidden',
+          });
+        };
+        cart = payload;
+      }
+    );
+    
+    //verify the cart was successfully validated
+    if (!cart) throw new Error('A cart was not found or is not valid.');
+    
+    //now that we have the cart, update the tax (in the future this shouldnt be performed on this route)
+    cart.tax = paymentIntentSucceeded.metadata.tax_amount / 100; //convert tax in cents to x.xx 
+    
+    try{
+      const orderDoc: Order = await createOrder(
+        userID,
+        totalAmount,
+        cart, //parse stringified cart
+        shippingAddress,
+        giftMessage
+      );
+      if (!orderDoc) throw new Error('An error has occured when updating the order doc.');
+    }catch(err){
+      handleError(res,HttpStatusCodes.NOT_MODIFIED,err);
+    };
+  }catch(err){
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
+  };
+
   // Return a 200 response to acknowledge receipt of the event
-  res.send();
+  res.status(HttpStatusCodes.OK).send();
 });
 
 shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authenticateCartToken, async(req:any,res,next)=>{
