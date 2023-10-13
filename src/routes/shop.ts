@@ -277,32 +277,23 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
 shopRouter.get('/all', async (req,res,next)=>{
   try{
     const allItems:(BagelItem | SpreadItem)[] | null = await getAllItems();
-    if (allItems){
-      res.status(HttpStatusCodes.OK).json({allItems:allItems});
-    }else{
-      res.status(HttpStatusCodes.NOT_FOUND).json({allItems: []});
-    };
+    if (!allItems) throw new Error('No shop items were found.');
+    res.status(HttpStatusCodes.OK).json({allItems:allItems});
   }catch(err){
-    console.log(err);
-    res.status(HttpStatusCodes.INTERNAL_SERVER_ERROR)
-      .json({message: 'An error has occured when fetching item data!',allItems: []});
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
 });
 
 //get shop item by item id
 shopRouter.get('/item/:itemID', async (req,res,next)=>{
   const itemID:string = req.params.itemID;
+
   try{
     const item:BagelItem | SpreadItem | null = await getItemByID(itemID);
-    if (item){
-      res.status(HttpStatusCodes.OK).json({item: item});
-    }else{
-      res.status(HttpStatusCodes.NOT_FOUND);
-    };
+    if (!item) throw new Error('Item not found for the provided itemID');
+    res.status(HttpStatusCodes.OK).json({item: item});
   }catch(err){
-    console.log(err);
-    res.status(HttpStatusCodes.INTERNAL_SERVER_ERROR)
-      .json({message: 'An error has occured when fetching item data!',allItems: []});
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
 });
 
@@ -310,28 +301,32 @@ shopRouter.get('/item/:itemID', async (req,res,next)=>{
 shopRouter.get('/orders/:orderID', authenticateLoginToken, async (req:any,res,next)=>{
   const orderID:string = req.params.orderID;
   const userID:string = req.payload.loginPayload.user._id;
-  const orderDoc:Order | null = await getOrderByOrderID(orderID);
-  //if a doc was found and user is authorized to access info
-  if (orderDoc && (userID===orderDoc.userID)){
+  let orderDoc:Order | null = null;
+  
+  try{
+    orderDoc= await getOrderByOrderID(orderID);
+    if (!orderDoc) throw new Error('An order doc was not found for the provided orderID.');
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  };
+
+  try{
+    // verify user is authorized to access info
+    if (orderDoc && (userID !== orderDoc.userID)) throw new Error('You are not authorized to access this order info.');
     res.status(HttpStatusCodes.OK).json({'orderDoc': orderDoc});
-  }
-  //a doc is not found by user
-  else if (!orderDoc){
-    res.status(HttpStatusCodes.NOT_FOUND);
-  }
-  //user is not authorized to access content
-  else{
-    res.status(HttpStatusCodes.UNAUTHORIZED);
-  }
+  }catch(err){
+    handleError(res,HttpStatusCodes.UNAUTHORIZED,err);
+  };
 });
 
 //get all orders for user
 shopRouter.get('/orders/', authenticateLoginToken, async (req:any,res,next)=>{
   const userID:string = req.payload.loginPayload.user._id;
-  const orders:Order[] | null = await getAllOrdersByUserID(userID);
-  if (orders){
-    res.status(HttpStatusCodes.OK).json({orders: orders});
-  }else{
-    res.status(HttpStatusCodes.NOT_FOUND);
+
+  try{
+    const orders:Order[] | null = await getAllOrdersByUserID(userID);
+    if (!orders) throw new Error('No orders were found for the provided user.');
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
 });
