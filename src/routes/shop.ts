@@ -68,7 +68,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
             message: 'Forbidden',
           });
         };
-        cart = payload;
+        cart = payload.cart;
       }
     );
     
@@ -414,10 +414,10 @@ shopRouter.get('/orders/:orderID', authenticateLoginToken, async (req:any,res,ne
 //get all orders for user
 shopRouter.get('/orders/', authenticateLoginToken, async (req:any,res,next)=>{
   const userID:string = req.payload.loginPayload.user._id;
-
   try{
     const orders:Order[] | null = await getAllOrdersByUserID(userID);
     if (!orders) throw new Error('No orders were found for the provided user.');
+    res.status(HttpStatusCodes.OK).json({orders: orders});
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
