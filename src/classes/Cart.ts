@@ -81,6 +81,16 @@ export default class Cart{
     this.items.splice(itemIndex, 1);
   };
 
+  cleanupCart = (membershipTier?:string)=>{
+    const tempMembershipTier = membershipTier || 'Non-Member';
+    //perform cleanup and verification
+    this.verifyUnitPrices();
+    this.calcTotalQuantity();
+    //reapply discounts to items
+    this.applyMembershipPricing(tempMembershipTier);
+    //calculate the new subtotal
+    this.calcSubtotal();
+  };
 
   getIndexOfItem = (itemName:string, selection?:string):number | null=>{
     let foundIndex = null;
