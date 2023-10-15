@@ -56,7 +56,6 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
     //get required properties to create the order doc from the payment intent
     const userID:string = paymentIntentSucceeded.metadata.userID;
     const totalAmount:number = paymentIntentSucceeded.amount;
-    console.log(paymentIntentSucceeded);
     const shippingAddress:Address = {
       line1: paymentIntentSucceeded.shipping.address.line1,
       line2: paymentIntentSucceeded.shipping.address.line2 || undefined,
@@ -67,7 +66,6 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
       phone: paymentIntentSucceeded.metadata.customer_phone,
       fullName: paymentIntentSucceeded.metadata.customer_fullName
     }; 
-    console.log(shippingAddress);
     const giftMessage = paymentIntentSucceeded.metadata.giftMessage || '';
     
     //get cart token from memory
