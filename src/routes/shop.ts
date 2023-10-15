@@ -64,8 +64,8 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
       state: paymentIntentSucceeded.shipping.address.state,
       postal_code: paymentIntentSucceeded.shipping.address.postal_code,
       country: paymentIntentSucceeded.shipping.address.country,
-      phone: paymentIntentSucceeded.shipping.address.phone,
-      fullName: paymentIntentSucceeded.shipping.address.name
+      phone: paymentIntentSucceeded.metadata.customer_phone,
+      fullName: paymentIntentSucceeded.metadata.customer_fullName
     }; 
     console.log(shippingAddress);
     const giftMessage = paymentIntentSucceeded.metadata.giftMessage || '';
@@ -179,19 +179,9 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
         amount: calculation.amount_total,
         metadata: {
           tax_calculation: calculation.id,
-          tax_amount: calculation.tax_amount_exclusive
-        },
-        shipping: {
-          name: address.fullName,
-          address: {
-            line1: address.line1,
-            line2: address.line2 || '',
-            city: address.city,
-            state: address.state,
-            postal_code: address.postal_code,
-            country: address.country
-          },
-          phone: address.phone
+          tax_amount: calculation.tax_amount_exclusive,
+          customer_phone: address.phone,
+          customer_fullName: address.fullName
         }
       });
     } else {
@@ -201,18 +191,6 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
         metadata: {
           tax_calculation: calculation.id,
           tax_amount: calculation.tax_amount_exclusive
-        },
-        shipping: {
-          name: address.fullName,
-          address: {
-            line1: address.line1,
-            line2: address.line2 || '',
-            city: address.city,
-            state: address.state,
-            postal_code: address.postal_code,
-            country: address.country
-          },
-          phone: address.phone
         },
         // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
         automatic_payment_methods: {enabled: true},
