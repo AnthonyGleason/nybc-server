@@ -56,6 +56,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
     //get required properties to create the order doc from the payment intent
     const userID:string = paymentIntentSucceeded.metadata.userID;
     const totalAmount:number = paymentIntentSucceeded.amount;
+    console.log(paymentIntentSucceeded);
     const shippingAddress:Address = {
       line1: paymentIntentSucceeded.shipping.address.line1,
       line2: paymentIntentSucceeded.shipping.address.line2 || undefined,
@@ -66,6 +67,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
       phone: paymentIntentSucceeded.shipping.address.phone,
       fullName: paymentIntentSucceeded.shipping.address.name
     }; 
+    console.log(shippingAddress);
     const giftMessage = paymentIntentSucceeded.metadata.giftMessage || '';
     
     //get cart token from memory
@@ -159,9 +161,7 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
           city: address.city,
           state: address.state,
           postal_code: address.postal_code,
-          country: address.country,
-          name: address.fullName,
-          phone: address.phone
+          country: address.country
         },
         address_source: "billing"
       },
@@ -181,6 +181,18 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
           tax_calculation: calculation.id,
           tax_amount: calculation.tax_amount_exclusive
         },
+        shipping: {
+          name: address.fullName,
+          address: {
+            line1: address.line1,
+            line2: address.line2 || '',
+            city: address.city,
+            state: address.state,
+            postal_code: address.postal_code,
+            country: address.country
+          },
+          phone: address.phone
+        }
       });
     } else {
       paymentIntent = await stripe.paymentIntents.create({
@@ -189,6 +201,18 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
         metadata: {
           tax_calculation: calculation.id,
           tax_amount: calculation.tax_amount_exclusive
+        },
+        shipping: {
+          name: address.fullName,
+          address: {
+            line1: address.line1,
+            line2: address.line2 || '',
+            city: address.city,
+            state: address.state,
+            postal_code: address.postal_code,
+            country: address.country
+          },
+          phone: address.phone
         },
         // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
         automatic_payment_methods: {enabled: true},
