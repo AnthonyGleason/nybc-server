@@ -14,6 +14,27 @@ import { handleError } from '@src/helpers/error';
 
 export const shopRouter = Router();
 
+//update the gift message
+shopRouter.post('/giftMessage', authenticateLoginToken, authenticateCartToken, async(req:any,res,next)=>{
+  const updatedGiftMessage:string = req.body.updatedGiftMessage;
+  //obtain the payment id from the first half of the clientSecret
+  let paymentID = req.body.clientSecret.split('_secret_')[0]; 
+  let paymentIntent:any = {};
+
+  try{
+    if (!paymentIntent) throw new Error('There was an error creating a payment intent.');
+    // Update the PaymentIntent if one already exists for this cart.
+      paymentIntent = await stripe.paymentIntents.update(paymentID, {
+        metadata: {
+          giftMessage: updatedGiftMessage
+        },
+      });
+  }catch(err){
+    handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
+  };
+  res.status(HttpStatusCodes.OK).json({paymentIntentToken: paymentIntent.client_secret});
+});
+
 // relevant documentation for the below webhook route, https://dashboard.stripe.com/webhooks/create?endpoint_location=local
 shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
   const sig = req.headers['stripe-signature'];
@@ -41,7 +62,9 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
       city: paymentIntentSucceeded.shipping.address.city,
       state: paymentIntentSucceeded.shipping.address.state,
       postal_code: paymentIntentSucceeded.shipping.address.postal_code,
-      country: paymentIntentSucceeded.shipping.address.country
+      country: paymentIntentSucceeded.shipping.address.country,
+      phone: paymentIntentSucceeded.shipping.address.phone,
+      fullName: paymentIntentSucceeded.shipping.address.name
     }; 
     const giftMessage = paymentIntentSucceeded.metadata.giftMessage || '';
     
@@ -137,6 +160,8 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
           state: address.state,
           postal_code: address.postal_code,
           country: address.country,
+          name: address.fullName,
+          phone: address.phone
         },
         address_source: "billing"
       },
