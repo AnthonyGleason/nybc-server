@@ -339,7 +339,7 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
   } = req.body;
   
   try{
-    if (!selection || !itemID || isNaN(updatedQuantity)) throw new Error('Required fields were not provided, or provided in an incorrect format.');
+    if (!itemID || isNaN(updatedQuantity)) throw new Error('Required fields were not provided, or provided in an incorrect format.');
     if (!cart) throw new Error('A cart is required but not provided.');
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
