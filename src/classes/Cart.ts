@@ -6,16 +6,19 @@ export default class Cart{
   subtotal:number;
   tax:number;
   totalQuantity:number;
+  promoCodeID:string;
 
   constructor(
     cartItems?:CartItem[],
     subtotal?:number,
-    tax?:number
+    tax?:number,
+    promoCodeID?:string
   ){
     this.items = cartItems || [];
     this.subtotal = subtotal || 0;
     this.tax = tax || 0;
     this.totalQuantity = 0;
+    this.promoCodeID = promoCodeID || ''; 
   };
 
   applyPromoPerk = (perk:string):void=>{

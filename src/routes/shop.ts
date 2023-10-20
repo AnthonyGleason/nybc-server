@@ -15,8 +15,27 @@ import { getPromoCodeByCode, updatePromoCodeByID } from '@src/controllers/promoc
 
 export const shopRouter = Router();
 
+shopRouter.get('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
+  console.log(req.payload.cartPayload);
+  const cart:Cart = new Cart(
+    req.payload.cartPayload.cart.items,
+    undefined,
+    undefined,
+    req.payload.cartPayload.cart.promoCodeID || undefined
+  );
+  console.log(cart);
+  //get discount amount 
+  //get promo code input for client
+  //get is promo applied to cart bool
+});
+
 shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
-  const cart:Cart = new Cart(req.payload.cartPayload.cart.items);
+  const cart:Cart = new Cart(
+    req.payload.cartPayload.cart.items,
+    undefined,
+    undefined,
+    req.payload.cartPayload.cart.promoCodeID || undefined
+  );
   const promoCodeInput:string = req.body.promoCodeInput;
   let paymentID = req.body.clientSecret.split('_secret_')[0]; 
   let paymentIntent:any = {};
@@ -48,7 +67,7 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
 
       //calc new subtotal
       cart.calcSubtotal();
-
+      
       //update the payment intent if one exists
       try{
         if (!paymentIntent) throw new Error('There was an error obtaining the payment intent.');
@@ -62,10 +81,16 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
       }catch(err){
         handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
       };
+
+      //set the promo code id for retrieval later
+      cart.promoCodeID = promoCodeDoc._id;
+      //issue updating cart token
+      const tempCartToken = issueCartJWTToken(cart);
+      
       //respond to client with the updated token
       res.status(200).json({
         clientSecret: paymentIntent.client_secret,
-        total: cart.subtotal
+        cartToken: tempCartToken
       });
     }else{
       //promo code is not valid
@@ -193,7 +218,12 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
 });
 
 shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authenticateCartToken, async(req:any,res,next)=>{
-  const cart:Cart = new Cart(req.payload.cartPayload.cart.items);
+  const cart:Cart = new Cart(
+    req.payload.cartPayload.cart.items,
+    undefined,
+    undefined,
+    req.payload.cartPayload.cart.promoCodeID || undefined
+  );
   // Get the customer's address from the request body
   const address:Address = req.body.address;
   //obtain the payment id from the first half of the clientSecret
@@ -299,7 +329,12 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
   };
   
   try{
-    cart = new Cart(req.payload.cartPayload.cart.items);
+    cart = new Cart(
+      req.payload.cartPayload.cart.items,
+      undefined,
+      undefined,
+      req.payload.cartPayload.cart.promoCodeID || undefined
+    );
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
     
     //cleanup cart
@@ -359,7 +394,12 @@ shopRouter.post('/carts',(req,res,next)=>{
 
 //get the user's current cart based on provided bearer token
 shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any,res,next)=>{
-  const cart:Cart = new Cart(req.payload.cartPayload.cart.items);
+  const cart:Cart = new Cart(
+    req.payload.cartPayload.cart.items,
+    undefined,
+    undefined,
+    req.payload.cartPayload.cart.promoCodeID || undefined
+  );
   //initialize the membership tier as a NonMember
   let membershipTier:string = 'Non-Member';
   let userDoc:User | null = null;
@@ -396,7 +436,12 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
   let userDoc:User | null = null;
   let membershipTier:string = 'Non-Member';
   //get cart from payload
-  let cart:Cart = new Cart(req.payload.cartPayload.cart.items);
+  const cart:Cart = new Cart(
+    req.payload.cartPayload.cart.items,
+    undefined,
+    undefined,
+    req.payload.cartPayload.cart.promoCodeID || undefined
+  );
 
   //destructure the request body
   const {
