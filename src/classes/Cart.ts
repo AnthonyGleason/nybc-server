@@ -7,18 +7,24 @@ export default class Cart{
   tax:number;
   totalQuantity:number;
   promoCodeID:string;
+  discountAmount:number;
+  finalPrice:number;
 
   constructor(
     cartItems?:CartItem[],
     subtotal?:number,
     tax?:number,
-    promoCodeID?:string
+    promoCodeID?:string,
+    discountAmount?:number,
+    finalPrice?:number
   ){
     this.items = cartItems || [];
     this.subtotal = subtotal || 0;
     this.tax = tax || 0;
     this.totalQuantity = 0;
     this.promoCodeID = promoCodeID || ''; 
+    this.discountAmount = discountAmount || 0;
+    this.finalPrice = finalPrice || 0;
   };
 
   applyPromoPerk = (perk:string):void=>{
@@ -31,6 +37,25 @@ export default class Cart{
       default:
         console.log('promo code not handled',perk);
     };
+  };
+
+  getPromoCodeDiscountMultiplier = (perk:string):number=>{
+    switch(perk){
+      case '25_PERCENT_OFF':
+        return 0.25;
+      default:
+        console.log('promo code not handled',perk);
+        return 1;
+    };
+  };
+
+  calcPromoCodeDiscountAmount = (perk:string):number =>{
+    let discountAmount:number = 0;
+    for (let cartItem of this.items){
+      discountAmount += ((cartItem.unitPrice * cartItem.quantity) * this.getPromoCodeDiscountMultiplier(perk));
+    };
+    this.discountAmount = discountAmount;
+    return discountAmount;
   };
 
   calcTotalQuantity = ():number=>{
@@ -50,6 +75,12 @@ export default class Cart{
     });
     this.subtotal = totalPrice;
     return totalPrice;
+  };
+
+  calcFinalPrice = ():number=>{
+    let finalPrice:number = this.subtotal - this.discountAmount;
+    this.finalPrice = finalPrice;
+    return finalPrice;
   };
 
   isCartEmpty = ():boolean=>{
@@ -96,15 +127,17 @@ export default class Cart{
     this.items.splice(itemIndex, 1);
   };
 
-  cleanupCart = (membershipTier?:string)=>{
+  cleanupCart = async (membershipTier?:string)=>{
     const tempMembershipTier = membershipTier || 'Non-Member';
     //perform cleanup and verification
-    this.verifyUnitPrices();
+    await this.verifyUnitPrices();
     this.calcTotalQuantity();
     //reapply discounts to items
     this.applyMembershipPricing(tempMembershipTier);
     //calculate the new subtotal
     this.calcSubtotal();
+    //calculate final price
+    this.calcFinalPrice();
   };
 
   getIndexOfItem = (itemName:string, selection?:string):number | null=>{

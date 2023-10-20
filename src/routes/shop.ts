@@ -11,22 +11,38 @@ import { Address, BagelItem, CartInterface, CartItem, Membership, Order, PromoCo
 import { createOrder, getAllOrdersByUserID, getOrderByOrderID } from '@src/controllers/order';
 import jwt from 'jsonwebtoken';
 import { handleError } from '@src/helpers/error';
-import { getPromoCodeByCode, updatePromoCodeByID } from '@src/controllers/promocode';
+import { getPromoCodeByCode, getPromoCodeByID, updatePromoCodeByID } from '@src/controllers/promocode';
 
 export const shopRouter = Router();
 
 shopRouter.get('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
-  console.log(req.payload.cartPayload);
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
     undefined,
     undefined,
-    req.payload.cartPayload.cart.promoCodeID || undefined
+    req.payload.cartPayload.cart.promoCodeID || undefined,
+    req.payload.cartPayload.cart.discountAmount || 0,
+    req.payload.cartPayload.cart.finalPrice || 0
   );
-  console.log(cart);
-  //get discount amount 
-  //get promo code input for client
-  //get is promo applied to cart bool
+  if (!cart.promoCodeID){
+    res.status(HttpStatusCodes.NOT_FOUND);
+  }else{
+    //get promo code doc
+    const promoDoc:PromoCode | null = await getPromoCodeByID(cart.promoCodeID);
+    if (promoDoc){
+      //get discount amount obtained by reversing the discount
+      const discountAmount:number = cart.discountAmount;
+      //get promo code input (name of code) for client
+      const promoCodeName:string = promoDoc.code;
+      //get is promo applied to cart bool
+      const isPromoApplied:boolean = true;
+      res.status(HttpStatusCodes.OK).json({
+        discountAmount: discountAmount,
+        isPromoApplied: isPromoApplied,
+        promoCodeName: promoCodeName
+      });
+    }
+  }
 });
 
 shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
@@ -34,15 +50,21 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
     req.payload.cartPayload.cart.items,
     undefined,
     undefined,
-    req.payload.cartPayload.cart.promoCodeID || undefined
+    req.payload.cartPayload.cart.promoCodeID || undefined,
+    req.payload.cartPayload.cart.discountAmount || 0,
+    req.payload.cartPayload.cart.finalPrice || 0
   );
   const promoCodeInput:string = req.body.promoCodeInput;
   let paymentID = req.body.clientSecret.split('_secret_')[0]; 
   let paymentIntent:any = {};
 
-  //cleanup cart
-  cart.cleanupCart();
+  //get membership tier and apply membership discount
+  const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
 
+  //cleanup cart
+  await cart.cleanupCart(membershipDoc?.tier || '');
+  console.log('cart after membership apply',cart);
+  
   //attempt to get promo code data
   const promoCodeDoc:PromoCode | null = await getPromoCodeByCode(promoCodeInput);
   
@@ -62,22 +84,28 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
       updatedPromoCodeDoc.totalTimesUsed+=1;
       await updatePromoCodeByID(promoCodeDoc._id,updatedPromoCodeDoc);
 
-      //apply promo code
-      cart.applyPromoPerk(promoCodeDoc.perk);
-
       //calc new subtotal
       cart.calcSubtotal();
-      
+      console.log('cart after subtotal calc', cart);
+
+      //apply promo code
+      cart.calcPromoCodeDiscountAmount(promoCodeDoc.perk);
+      console.log('cart after apply promo', cart);
+
+      //calc new final price
+      cart.calcFinalPrice();
+      console.log('cart after final price calc', cart);
+
       //update the payment intent if one exists
       try{
         if (!paymentIntent) throw new Error('There was an error obtaining the payment intent.');
         // Update the PaymentIntent if one already exists for this cart.
-          paymentIntent = await stripe.paymentIntents.update(paymentID, {
-            amount: Math.floor(cart.subtotal*100), //convert to cents and round it down
-            metadata: {
-              promoCodeID: promoCodeDoc._id
-            },
-          });
+        paymentIntent = await stripe.paymentIntents.update(paymentID, {
+          amount: Math.floor(cart.finalPrice*100), //convert to cents and round it down
+          metadata: {
+            promoCodeID: promoCodeDoc._id
+          },
+        });
       }catch(err){
         handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
       };
@@ -194,13 +222,13 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
     if (!cart) throw new Error('A cart was not found or is not valid.');
     
     //now that we have the cart, update the tax (in the future this shouldnt be performed on this route)
-    cart.tax = paymentIntentSucceeded.metadata.tax_amount / 100; //convert tax in cents to x.xx 
+    cart.tax = paymentIntentSucceeded.metadata.tax_amount / 100; //convert tax in cents to x.xx (making it human readable)
     
     try{
       const orderDoc: Order = await createOrder(
         userID,
         totalAmount,
-        cart, //parse stringified cart
+        cart,
         shippingAddress,
         giftMessage,
         promoCodeID
@@ -222,7 +250,9 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
     req.payload.cartPayload.cart.items,
     undefined,
     undefined,
-    req.payload.cartPayload.cart.promoCodeID || undefined
+    req.payload.cartPayload.cart.promoCodeID || undefined,
+    req.payload.cartPayload.cart.discountAmount || 0,
+    req.payload.cartPayload.cart.finalPrice || 0
   );
   // Get the customer's address from the request body
   const address:Address = req.body.address;
@@ -239,11 +269,21 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
 
+  //attempt to get promo code perk data
+  let perk:string = '';
+  let promoCodeDoc:PromoCode | null;
+
+  if (cart.promoCodeID){
+    promoCodeDoc = await getPromoCodeByID(cart.promoCodeID);
+    if (promoCodeDoc) perk = promoCodeDoc.perk;
+  };
+  
+
   // Convert each cart item to a Stripe line item object
   const lineItems = cart.items.map(
     (cartItem:CartItem,index:number) => ({
       reference: index,
-      amount: Math.floor((cartItem.unitPrice * cartItem.quantity)*100), //convert to cents
+      amount: Math.floor(((cartItem.unitPrice * cartItem.quantity)*100)*cart.getPromoCodeDiscountMultiplier(perk)), //convert to cents and apply the promo code discount if applicable
       quantity: cartItem.quantity
     })
   );
@@ -333,12 +373,14 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
       req.payload.cartPayload.cart.items,
       undefined,
       undefined,
-      req.payload.cartPayload.cart.promoCodeID || undefined
+      req.payload.cartPayload.cart.promoCodeID || undefined,
+      req.payload.cartPayload.cart.discountAmount || 0,
+      req.payload.cartPayload.cart.finalPrice || 0
     );
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
     
     //cleanup cart
-    cart.cleanupCart(membershipTier);
+    await cart.cleanupCart(membershipTier);
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
@@ -352,10 +394,10 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
 
   try{
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
-    const subtotalInCents:number = Math.floor(cart.subtotal * 100);
+    const finalPriceInCents:number = Math.floor(cart.finalPrice * 100);
     //create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: subtotalInCents,
+      amount: finalPriceInCents,
       currency: 'usd', // Change this to your preferred currency
       metadata:{
         userID: req.payload.loginPayload.user._id
@@ -398,8 +440,11 @@ shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any
     req.payload.cartPayload.cart.items,
     undefined,
     undefined,
-    req.payload.cartPayload.cart.promoCodeID || undefined
+    req.payload.cartPayload.cart.promoCodeID || undefined,
+    req.payload.cartPayload.cart.discountAmount || 0,
+    req.payload.cartPayload.cart.finalPrice || 0
   );
+
   //initialize the membership tier as a NonMember
   let membershipTier:string = 'Non-Member';
   let userDoc:User | null = null;
@@ -423,7 +468,7 @@ shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any
     if (!cart) throw new Error('An error occured when obtaining cart data.');
 
     //cleanup cart
-    cart.cleanupCart(membershipTier);
+    await cart.cleanupCart(membershipTier);
     
     res.status(HttpStatusCodes.OK).json({cart: req.payload.cartPayload.cart});
   }catch(err){
@@ -440,7 +485,9 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
     req.payload.cartPayload.cart.items,
     undefined,
     undefined,
-    req.payload.cartPayload.cart.promoCodeID || undefined
+    req.payload.cartPayload.cart.promoCodeID || undefined,
+    req.payload.cartPayload.cart.discountAmount || 0,
+    req.payload.cartPayload.cart.finalPrice || 0
   );
 
   //destructure the request body
@@ -492,7 +539,7 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
     invalidatedTokens.push(req.tokens.cartToken);
 
     //cleanup cart
-    cart.cleanupCart(membershipTier);
+    await cart.cleanupCart(membershipTier);
 
     //sign a new cart token for the user
     const token:string = issueCartJWTToken(cart);
