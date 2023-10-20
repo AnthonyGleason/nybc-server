@@ -7,14 +7,16 @@ export const createOrder = async function(
   totalAmount:number,
   cart:CartInterface,
   shippingAddress:Address,
-  giftMessage?:string
+  giftMessage?:string,
+  promoCodeID?:string,
   ):Promise<Order>{
   return await OrderModel.create({
     userID: userID,
     totalAmount:totalAmount,
     cart:cart,
     shippingAddress:shippingAddress,
-    giftMessage:giftMessage
+    giftMessage:giftMessage,
+    promoCodeID: promoCodeID
   });
 };
 

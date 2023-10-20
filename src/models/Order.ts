@@ -33,6 +33,9 @@ const OrderSchema = new mongoose.Schema({
   },
   giftMessage:{
     type: String,
+  },
+  promoCodeID:{
+    type: String,
   }
 });
 

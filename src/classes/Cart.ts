@@ -18,6 +18,18 @@ export default class Cart{
     this.totalQuantity = 0;
   };
 
+  applyPromoPerk = (perk:string):void=>{
+    switch(perk){
+      case '25_PERCENT_OFF':
+        for (let cartItem of this.items){
+          cartItem.unitPrice = cartItem.unitPrice - (cartItem.unitPrice * 0.25);
+        };
+        break;
+      default:
+        console.log('promo code not handled',perk);
+    };
+  };
+
   calcTotalQuantity = ():number=>{
     let totalQuantity:number = 0;
     this.items.forEach((item:CartItem)=>{

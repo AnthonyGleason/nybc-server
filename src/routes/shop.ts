@@ -7,22 +7,91 @@ import { stripe } from '@src/util/stripe';
 import { authenticateCartToken, authenticateLoginToken, handleCartLoginAuth} from '@src/middlewares/auth';
 import { getMembershipByUserID } from '@src/controllers/membership';
 import { getUserByID } from '@src/controllers/user';
-import { Address, BagelItem, CartInterface, CartItem, Membership, Order, SpreadItem, TempCartToken, User } from '@src/interfaces/interfaces';
+import { Address, BagelItem, CartInterface, CartItem, Membership, Order, PromoCode, SpreadItem, TempCartToken, User } from '@src/interfaces/interfaces';
 import { createOrder, getAllOrdersByUserID, getOrderByOrderID } from '@src/controllers/order';
 import jwt from 'jsonwebtoken';
 import { handleError } from '@src/helpers/error';
+import { getPromoCodeByCode, updatePromoCodeByID } from '@src/controllers/promocode';
 
 export const shopRouter = Router();
 
+shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
+  const cart:Cart = new Cart(req.payload.cartPayload.cart.items);
+  const promoCodeInput:string = req.body.promoCodeInput;
+  let paymentID = req.body.clientSecret.split('_secret_')[0]; 
+  let paymentIntent:any = {};
+
+  //cleanup cart
+  cart.cleanupCart();
+
+  //attempt to get promo code data
+  const promoCodeDoc:PromoCode | null = await getPromoCodeByCode(promoCodeInput);
+  
+  //apply promo code to temp payment intent if it exists and the user correctly entered the code
+  if (
+    promoCodeDoc && //a promo code doc was found
+    promoCodeInput===promoCodeDoc.code && //user correctly entered the promo code
+    promoCodeDoc.dateOfExpiry > new Date() //verify promo code is not expired
+  ){
+    //verify promo code still has uses
+    if (
+      !promoCodeDoc.totalAllowedUses || //promo code has unlimited uses
+      (promoCodeDoc.totalAllowedUses && (promoCodeDoc.totalAllowedUses>promoCodeDoc.totalTimesUsed)) //promo code has uses left
+    ){
+      //add +1 to total uses
+      let updatedPromoCodeDoc:PromoCode = promoCodeDoc;
+      updatedPromoCodeDoc.totalTimesUsed+=1;
+      await updatePromoCodeByID(promoCodeDoc._id,updatedPromoCodeDoc);
+
+      //apply promo code
+      cart.applyPromoPerk(promoCodeDoc.perk);
+
+      //calc new subtotal
+      cart.calcSubtotal();
+
+      //update the payment intent if one exists
+      try{
+        if (!paymentIntent) throw new Error('There was an error obtaining the payment intent.');
+        // Update the PaymentIntent if one already exists for this cart.
+          paymentIntent = await stripe.paymentIntents.update(paymentID, {
+            amount: Math.floor(cart.subtotal*100), //convert to cents and round it down
+            metadata: {
+              promoCodeID: promoCodeDoc._id
+            },
+          });
+      }catch(err){
+        handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
+      };
+      //respond to client with the updated token
+      res.status(200).json({
+        clientSecret: paymentIntent.client_secret,
+        total: cart.subtotal
+      });
+    }else{
+      //promo code is not valid
+      console.log('not valid or expired');
+    };
+  };
+});
+
+shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
+  //verify cart item prices
+  //calculate membership discounts
+  //remove promo code from cart if it exists
+  //calculate subtotal
+  //update the payment intent if one exists
+  //respond to client with updated token
+});
+
 //update the gift message
-shopRouter.post('/giftMessage', authenticateLoginToken, authenticateCartToken, async(req:any,res,next)=>{
+shopRouter.put('/giftMessage', authenticateLoginToken, authenticateCartToken, async(req:any,res,next)=>{
   const updatedGiftMessage:string = req.body.updatedGiftMessage;
   //obtain the payment id from the first half of the clientSecret
   let paymentID = req.body.clientSecret.split('_secret_')[0]; 
   let paymentIntent:any = {};
 
   try{
-    if (!paymentIntent) throw new Error('There was an error creating a payment intent.');
+    if (!paymentIntent) throw new Error('There was an error obtaining the payment intent.');
     // Update the PaymentIntent if one already exists for this cart.
       paymentIntent = await stripe.paymentIntents.update(paymentID, {
         metadata: {
@@ -66,7 +135,8 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
       phone: paymentIntentSucceeded.metadata.customer_phone,
       fullName: paymentIntentSucceeded.metadata.customer_fullName
     }; 
-    const giftMessage = paymentIntentSucceeded.metadata.giftMessage || '';
+    const giftMessage:string = paymentIntentSucceeded.metadata.giftMessage || '';
+    const promoCodeID:string = paymentIntentSucceeded.metadata.promoCodeID || '';
     
     //get cart token from memory
     let tempCartToken:TempCartToken | undefined= tempCartTokens.find((tempCartToken:TempCartToken)=>{
@@ -107,7 +177,8 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
         totalAmount,
         cart, //parse stringified cart
         shippingAddress,
-        giftMessage
+        giftMessage,
+        promoCodeID
       );
       if (!orderDoc) throw new Error('An error has occured when updating the order doc.');
     }catch(err){
