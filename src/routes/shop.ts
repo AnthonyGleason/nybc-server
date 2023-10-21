@@ -63,8 +63,7 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
 
   //cleanup cart
   await cart.cleanupCart(membershipDoc?.tier || '');
-  console.log('cart after membership apply',cart);
-  
+
   //attempt to get promo code data
   const promoCodeDoc:PromoCode | null = await getPromoCodeByCode(promoCodeInput);
   
@@ -86,15 +85,12 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
 
       //calc new subtotal
       cart.calcSubtotal();
-      console.log('cart after subtotal calc', cart);
 
       //apply promo code
       cart.calcPromoCodeDiscountAmount(promoCodeDoc.perk);
-      console.log('cart after apply promo', cart);
 
       //calc new final price
       cart.calcFinalPrice();
-      console.log('cart after final price calc', cart);
 
       //update the payment intent if one exists
       try{
@@ -278,16 +274,20 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
     if (promoCodeDoc) perk = promoCodeDoc.perk;
   };
   
+  console.log('cart before line items',cart);
+  const discountMultiplier:number = cart.getPromoCodeDiscountMultiplier(perk);
+  console.log('discount multiplier',discountMultiplier);
 
   // Convert each cart item to a Stripe line item object
   const lineItems = cart.items.map(
     (cartItem:CartItem,index:number) => ({
       reference: index,
-      amount: Math.floor(((cartItem.unitPrice * cartItem.quantity)*100)*cart.getPromoCodeDiscountMultiplier(perk)), //convert to cents and apply the promo code discount if applicable
+      amount: Math.floor(((cartItem.unitPrice - (cartItem.unitPrice * discountMultiplier))*cartItem.quantity)*100), //convert to cents and apply the promo code discount if applicable
       quantity: cartItem.quantity
     })
-  );
-
+  ); 
+  console.log('line items calculated', lineItems);
+  
   try{
     // Create a tax calculation using the Stripe API
     calculation = await stripe.tax.calculations.create({
@@ -340,7 +340,8 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   }catch(err){
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
-  
+  console.log('tax amount',calculation.tax_amount_exclusive);
+  console.log('total cost', calculation.amount_total);
   res.status(200).json({
     paymentIntentToken: paymentIntent.client_secret,
     taxAmount: calculation.tax_amount_exclusive,
