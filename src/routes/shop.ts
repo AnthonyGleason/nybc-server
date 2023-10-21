@@ -87,7 +87,7 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
       cart.calcSubtotal();
 
       //apply promo code
-      cart.calcPromoCodeDiscountAmount(promoCodeDoc.perk);
+      const discountAmount:number = cart.calcPromoCodeDiscountAmount(promoCodeDoc.perk);
 
       //calc new final price
       cart.calcFinalPrice();
@@ -114,7 +114,8 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
       //respond to client with the updated token
       res.status(200).json({
         clientSecret: paymentIntent.client_secret,
-        cartToken: tempCartToken
+        cartToken: tempCartToken,
+        discountAmount: discountAmount
       });
     }else{
       //promo code is not valid
