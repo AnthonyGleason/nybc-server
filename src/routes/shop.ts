@@ -241,9 +241,16 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
   res.status(HttpStatusCodes.OK).send();
 });
 
-shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, authenticateLoginToken, async (req:any,res,next)=>{
-  const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
-  const cart:Cart = new Cart(
+shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCartLoginAuth, async (req:any,res,next)=>{
+  let membershipDoc:Membership | null = null;
+  if (
+    req.payload.loginPayload &&
+    req.payload.loginPayload.user &&
+    req.payload.loginPayload.user._id
+  ){
+    membershipDoc = await getMembershipByUserID(req.payload.loginPayload.user._id);
+  };
+    const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
     undefined,
     undefined,
@@ -259,7 +266,12 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, authenti
       cart: cart
     });
   }else{
-    res.status(HttpStatusCodes.NOT_FOUND);
+    await cart.cleanupCart('Non-Member');
+    const tempCartToken:string = issueCartJWTToken(cart);
+    res.status(HttpStatusCodes.OK).json({
+      cartToken: tempCartToken,
+      cart: cart
+    });
   };
 });
 
