@@ -41,8 +41,8 @@ shopRouter.get('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
         isPromoApplied: isPromoApplied,
         promoCodeName: promoCodeName
       });
-    }
-  }
+    };
+  };
 });
 
 shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
@@ -241,6 +241,28 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
   res.status(HttpStatusCodes.OK).send();
 });
 
+shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, authenticateLoginToken, async (req:any,res,next)=>{
+  const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
+  const cart:Cart = new Cart(
+    req.payload.cartPayload.cart.items,
+    undefined,
+    undefined,
+    req.payload.cartPayload.cart.promoCodeID || undefined,
+    req.payload.cartPayload.cart.discountAmount || 0,
+    req.payload.cartPayload.cart.finalPrice || 0
+  );
+  if (membershipDoc){
+    await cart.cleanupCart(membershipDoc.tier);
+    const tempCartToken:string = issueCartJWTToken(cart);
+    res.status(HttpStatusCodes.OK).json({
+      cartToken: tempCartToken,
+      cart: cart
+    });
+  }else{
+    res.status(HttpStatusCodes.NOT_FOUND);
+  };
+});
+
 shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authenticateCartToken, async(req:any,res,next)=>{
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
@@ -252,7 +274,7 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   );
   // Get the customer's address from the request body
   const address:Address = req.body.address;
-  //obtain the payment id from the first half of the clientSecret
+  // obtain the payment id from the first half of the clientSecret
   let paymentID = req.body.clientSecret.split('_secret_')[0]; 
   let paymentIntent:any = {};
   let calculation;
@@ -274,9 +296,7 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
     if (promoCodeDoc) perk = promoCodeDoc.perk;
   };
   
-  console.log('cart before line items',cart);
   const discountMultiplier:number = cart.getPromoCodeDiscountMultiplier(perk);
-  console.log('discount multiplier',discountMultiplier);
 
   // Convert each cart item to a Stripe line item object
   const lineItems = cart.items.map(
@@ -286,7 +306,6 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
       quantity: cartItem.quantity
     })
   ); 
-  console.log('line items calculated', lineItems);
   
   try{
     // Create a tax calculation using the Stripe API
@@ -340,8 +359,6 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   }catch(err){
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
-  console.log('tax amount',calculation.tax_amount_exclusive);
-  console.log('total cost', calculation.amount_total);
   res.status(200).json({
     paymentIntentToken: paymentIntent.client_secret,
     taxAmount: calculation.tax_amount_exclusive,
