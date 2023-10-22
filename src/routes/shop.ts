@@ -125,12 +125,46 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
 });
 
 shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
-  //verify cart item prices
-  //calculate membership discounts
-  //remove promo code from cart if it exists
-  //calculate subtotal
+  const cart:Cart = new Cart(
+    req.payload.cartPayload.cart.items,
+    undefined,
+    undefined,
+    req.payload.cartPayload.cart.promoCodeID || undefined,
+    req.payload.cartPayload.cart.discountAmount || 0,
+    req.payload.cartPayload.cart.finalPrice || 0
+  );
+  let paymentID = req.body.clientSecret.split('_secret_')[0]; 
+  let paymentIntent:any = {};
+
+  //get membership tier and apply membership discount
+  const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
+
+  cart.discountAmount = 0;
+  cart.promoCodeID = '';
+  await cart.cleanupCart(membershipDoc?.tier || '');
+
   //update the payment intent if one exists
-  //respond to client with updated token
+  try{
+    if (!paymentIntent) throw new Error('There was an error obtaining the payment intent.');
+    // Update the PaymentIntent if one already exists for this cart.
+    paymentIntent = await stripe.paymentIntents.update(paymentID, {
+      amount: Math.floor(cart.finalPrice*100), //convert to cents and round it down
+      metadata: {
+        promoCodeID: ''
+      },
+    });
+  }catch(err){
+    handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
+  };
+  console.log('cart was updated',cart);
+  //issue updating cart token
+  const tempCartToken = issueCartJWTToken(cart);
+  //respond to client with the updated token
+  res.status(200).json({
+    clientSecret: paymentIntent.client_secret,
+    cartToken: tempCartToken,
+    discountAmount: cart.discountAmount
+  });
 });
 
 //update the gift message
@@ -566,14 +600,25 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
       cart.handleModifyCart(itemDoc,updatedQuantity,selection);
     };
 
-    //invalidate the old cart token
-    invalidatedTokens.push(req.tokens.cartToken);
-
     //cleanup cart
     await cart.cleanupCart(membershipTier);
 
+    //update the promo code pricing if a code was used
+    if (cart.promoCodeID){
+      //attempt to get promo code data
+      const promoCodeDoc:PromoCode | null = await getPromoCodeByID(cart.promoCodeID);
+    
+      //apply promo code
+      const discountAmount:number = cart.calcPromoCodeDiscountAmount(promoCodeDoc?.perk || '');
+      cart.discountAmount = discountAmount;
+    };
+
+    //invalidate the old cart token
+    invalidatedTokens.push(req.tokens.cartToken);
+
     //sign a new cart token for the user
     const token:string = issueCartJWTToken(cart);
+    
     //send it to the client
     res.status(HttpStatusCodes.OK).json({
       cartToken: token,
