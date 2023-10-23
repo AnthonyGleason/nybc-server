@@ -162,18 +162,46 @@ export default class Cart{
   };
 
   verifyUnitPrices = async () =>{
-    for (let cartItem of this.items){
-      if (cartItem.itemData.cat==='bagel' && cartItem.selection === 'four') {
-        const tempItemData:BagelItem | null = await getItemByID(cartItem.itemData._id) as BagelItem;
-        if (tempItemData) cartItem.unitPrice = tempItemData.fourPrice;
+    const promises: Promise<BagelItem | SpreadItem | undefined>[] = this.items.map(async (cartItem) => {
+      if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'four') {
+        return getItemByID(cartItem.itemData._id) as Promise<BagelItem>;
       } else if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'dozen') {
-        const tempItemData:BagelItem | null = await getItemByID(cartItem.itemData._id) as BagelItem;
-        if (tempItemData) cartItem.unitPrice = tempItemData.dozenPrice;
+        return getItemByID(cartItem.itemData._id) as Promise<BagelItem>;
       } else if (cartItem.itemData.cat === 'spread') {
-        const tempItemData:SpreadItem | null = await getItemByID(cartItem.itemData._id) as SpreadItem;
-        if (tempItemData) cartItem.unitPrice = tempItemData.price;
-      };
-    };
+        return getItemByID(cartItem.itemData._id) as Promise<SpreadItem>;
+      }
+      return Promise.resolve(undefined);
+    });
+    
+    const itemDataArray: (BagelItem | SpreadItem | undefined)[] = await Promise.all(promises);
+
+    // Now that we have all the itemData, you can update cartItem.unitPrice here.
+    this.items.forEach((cartItem, index) => {
+      if (itemDataArray[index]) {
+        const itemData = itemDataArray[index];
+        if (itemData===undefined) return;
+        if (
+          cartItem.itemData.cat === 'bagel' &&
+          cartItem.selection === 'four'
+        ) {
+          const tempItemData = itemData as BagelItem;
+          cartItem.unitPrice = tempItemData.fourPrice;
+        } 
+        else if (
+          cartItem.itemData.cat === 'bagel' && 
+          cartItem.selection === 'dozen'
+        ) {
+          const tempItemData = itemData as BagelItem;
+          cartItem.unitPrice = tempItemData.dozenPrice;
+        } 
+        else if (
+          cartItem.itemData.cat === 'spread'
+        ) {
+          const tempItemData = itemData as SpreadItem;
+          cartItem.unitPrice = tempItemData.price;
+        }
+      }
+    });
   };
 
   handleModifyCart = (itemDoc:BagelItem | SpreadItem, updatedQuantity:number, selection?:string)=>{

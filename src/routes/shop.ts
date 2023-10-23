@@ -54,60 +54,59 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
     req.payload.cartPayload.cart.discountAmount || 0,
     req.payload.cartPayload.cart.finalPrice || 0
   );
+
   const promoCodeInput:string = req.body.promoCodeInput;
-  let paymentID = req.body.clientSecret.split('_secret_')[0]; 
+  const paymentID = req.body.clientSecret.split('_secret_')[0];
   let paymentIntent:any = {};
+  let membershipTier:string = 'Non-Member';
 
-  //get membership tier and apply membership discount
-  const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
-
-  //cleanup cart
-  await cart.cleanupCart(membershipDoc?.tier || '');
-
-  //attempt to get promo code data
-  const promoCodeDoc:PromoCode | null = await getPromoCodeByCode(promoCodeInput);
+  let membershipDoc:Membership | null = null;
+  let promoCodeDoc:PromoCode | null = null;
   
-  //apply promo code to temp payment intent if it exists and the user correctly entered the code
-  if (
-    promoCodeDoc && //a promo code doc was found
-    promoCodeInput===promoCodeDoc.code && //user correctly entered the promo code
-    promoCodeDoc.dateOfExpiry > new Date() //verify promo code is not expired
-  ){
-    //verify promo code still has uses
-    if (
-      !promoCodeDoc.totalAllowedUses || //promo code has unlimited uses
-      (promoCodeDoc.totalAllowedUses && (promoCodeDoc.totalAllowedUses>promoCodeDoc.totalTimesUsed)) //promo code has uses left
-    ){
+  //attempt to get promocode doc and membership info for the current user
+  try{
+    [membershipDoc, promoCodeDoc] = await Promise.all([
+      getMembershipByUserID(req.payload.loginPayload.user._id), //get membership information for user
+      getPromoCodeByCode(promoCodeInput)  //attempt to get promo code data
+    ]);
+    if (membershipDoc?.tier) membershipTier = membershipDoc.tier;
+    //ensure promo code exists
+    if (!promoCodeDoc) throw new Error('The entered promo code does not exist.');
+    
+    try{
+      //ensure promo code is not expired
+      if (promoCodeDoc.dateOfExpiry < new Date()) throw new Error('The promo code is expired.');
+      if (promoCodeDoc.totalAllowedUses && (promoCodeDoc.totalAllowedUses<promoCodeDoc.totalTimesUsed)) throw new Error('The promo code is out of uses.');
+    }catch(err){
+      handleError(res,HttpStatusCodes.FORBIDDEN,err);
+    };
+
+    //apply promo code
+    try{
       //add +1 to total uses
       let updatedPromoCodeDoc:PromoCode = promoCodeDoc;
       updatedPromoCodeDoc.totalTimesUsed+=1;
-      await updatePromoCodeByID(promoCodeDoc._id,updatedPromoCodeDoc);
-
-      //calc new subtotal
-      cart.calcSubtotal();
-
-      //apply promo code
+      updatePromoCodeByID(promoCodeDoc._id,updatedPromoCodeDoc);
+      
       const discountAmount:number = cart.calcPromoCodeDiscountAmount(promoCodeDoc.perk);
 
-      //calc new final price
-      cart.calcFinalPrice();
-
-      //update the payment intent if one exists
-      try{
-        if (!paymentIntent) throw new Error('There was an error obtaining the payment intent.');
-        // Update the PaymentIntent if one already exists for this cart.
-        paymentIntent = await stripe.paymentIntents.update(paymentID, {
-          amount: Math.floor(cart.finalPrice*100), //convert to cents and round it down
-          metadata: {
-            promoCodeID: promoCodeDoc._id
-          },
-        });
-      }catch(err){
-        handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
-      };
-
-      //set the promo code id for retrieval later
+      //set the promo code in the user's cart
       cart.promoCodeID = promoCodeDoc._id;
+
+      //verify payment intent exists
+      if (!paymentIntent) throw new Error('There was an error obtaining the payment intent.');
+
+      //cleanup cart
+      await cart.cleanupCart(membershipDoc?.tier || '');
+
+      // Update the PaymentIntent if one already exists for this cart.
+      paymentIntent = await stripe.paymentIntents.update(paymentID, {
+        amount: Math.floor(cart.finalPrice*100), //convert to cents and round it down
+        metadata: {
+          promoCodeID: promoCodeDoc._id
+        },
+      });
+
       //issue updating cart token
       const tempCartToken = issueCartJWTToken(cart);
       
@@ -117,11 +116,12 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
         cartToken: tempCartToken,
         discountAmount: discountAmount
       });
-    }else{
-      //promo code is not valid
-      console.log('not valid or expired');
+    }catch(err){
+      handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
     };
-  };
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  };   
 });
 
 shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
