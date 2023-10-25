@@ -156,7 +156,6 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
   }catch(err){
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
-  console.log('cart was updated',cart);
   //issue updating cart token
   const tempCartToken = issueCartJWTToken(cart);
   //respond to client with the updated token
@@ -319,13 +318,23 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
     req.payload.cartPayload.cart.discountAmount || 0,
     req.payload.cartPayload.cart.finalPrice || 0
   );
+  //need to cleanup cart before performing tax calculations
+  try{
+    let membershipTier:string = 'Non-Member';
+    const membershipDoc: Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id as string);
+    if (membershipDoc) membershipTier = membershipDoc.tier;
+
+    //need to cleanup cart to verify cart data and calc totalquantity / final price
+    await cart.cleanupCart(membershipTier);
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  };
   // Get the customer's address from the request body
   const address:Address = req.body.address;
   // obtain the payment id from the first half of the clientSecret
   let paymentID = req.body.clientSecret.split('_secret_')[0]; 
   let paymentIntent:any = {};
   let calculation;
-
   //validate required inputs were provided
   try{
     if (!address || !paymentID) throw new Error('A address or paymentID was not provided.');
@@ -346,13 +355,18 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   const discountMultiplier:number = cart.getPromoCodeDiscountMultiplier(perk);
 
   // Convert each cart item to a Stripe line item object
-  const lineItems = cart.items.map(
-    (cartItem:CartItem,index:number) => ({
+  const lineItems = cart.items.map((cartItem: CartItem, index: number) => {
+    const adjustedUnitPrice:number = cartItem.unitPrice * discountMultiplier;
+    const adjustedUnitPriceWithDiscount:number = cartItem.unitPrice - adjustedUnitPrice
+    const totalAmount:number = adjustedUnitPriceWithDiscount * cartItem.quantity;
+    const totalAmountInCents:number = Math.floor(totalAmount*100);
+
+    return {
       reference: index,
-      amount: Math.floor(((cartItem.unitPrice - (cartItem.unitPrice * discountMultiplier))*cartItem.quantity)*100), //convert to cents and apply the promo code discount if applicable
+      amount: totalAmountInCents,
       quantity: cartItem.quantity
-    })
-  ); 
+    }
+  });
   
   try{
     // Create a tax calculation using the Stripe API
@@ -406,6 +420,7 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   }catch(err){
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
+
   res.status(200).json({
     paymentIntentToken: paymentIntent.client_secret,
     taxAmount: calculation.tax_amount_exclusive,
@@ -602,7 +617,6 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
 
     //cleanup cart
     await cart.cleanupCart(membershipTier);
-
     //update the promo code pricing if a code was used
     if (cart.promoCodeID){
       //attempt to get promo code data

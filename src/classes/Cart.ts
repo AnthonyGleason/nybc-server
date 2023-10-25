@@ -45,7 +45,7 @@ export default class Cart{
         return 0.25;
       default:
         console.log('promo code not handled',perk);
-        return 1;
+        return 0; //RETURN NO DISCOUNT, if you return 1 the customer gets 100% off
     };
   };
 
