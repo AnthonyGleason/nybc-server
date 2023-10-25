@@ -14,13 +14,13 @@ export const getItemByID = async function(itemID:string):Promise<BagelItem | Spr
 //create a shop item
 export const createBagelItem = async function(
   dozenPrice:number,
-  fourPrice:number,
+  sixPrice:number,
   name:string,
   cat:string,
 ){
   return await ItemModel.create({
     dozenPrice,
-    fourPrice,
+    sixPrice,
     name,
     cat
   });

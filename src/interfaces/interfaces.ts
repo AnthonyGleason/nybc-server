@@ -22,7 +22,7 @@ export interface SpreadItem{
 //item
 export interface BagelItem{
   dozenPrice:number,
-  fourPrice:number,
+  sixPrice:number,
   name: string,
   _id: string, // unique id given by mongodb
   cat:string,

@@ -8,7 +8,7 @@ const ItemSchema = new mongoose.Schema({
   price:{
     type: Number,
   },
-  fourPrice:{
+  sixPrice:{
     type:Number,
   },
   dozenPrice:{

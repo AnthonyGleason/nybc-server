@@ -110,9 +110,9 @@ export default class Cart{
           break;
       };
       //handle applying the discount based on the item type
-      if (cartItem.itemData.cat==='bagel' && cartItem.selection === 'four') {
+      if (cartItem.itemData.cat==='bagel' && cartItem.selection === 'six') {
         const tempItemData:BagelItem = cartItem.itemData as BagelItem;
-        cartItem.unitPrice = tempItemData.fourPrice - (tempItemData.fourPrice * discountMultiplier);
+        cartItem.unitPrice = tempItemData.sixPrice - (tempItemData.sixPrice * discountMultiplier);
       } else if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'dozen') {
         const tempItemData:BagelItem = cartItem.itemData as BagelItem;
         cartItem.unitPrice = tempItemData.dozenPrice - (tempItemData.dozenPrice * discountMultiplier);
@@ -163,7 +163,7 @@ export default class Cart{
 
   verifyUnitPrices = async () =>{
     const promises: Promise<BagelItem | SpreadItem | undefined>[] = this.items.map(async (cartItem) => {
-      if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'four') {
+      if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'six') {
         return getItemByID(cartItem.itemData._id) as Promise<BagelItem>;
       } else if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'dozen') {
         return getItemByID(cartItem.itemData._id) as Promise<BagelItem>;
@@ -182,10 +182,10 @@ export default class Cart{
         if (itemData===undefined) return;
         if (
           cartItem.itemData.cat === 'bagel' &&
-          cartItem.selection === 'four'
+          cartItem.selection === 'six'
         ) {
           const tempItemData = itemData as BagelItem;
-          cartItem.unitPrice = tempItemData.fourPrice;
+          cartItem.unitPrice = tempItemData.sixPrice;
         } 
         else if (
           cartItem.itemData.cat === 'bagel' && 
@@ -209,9 +209,9 @@ export default class Cart{
     if (itemIndex === null && updatedQuantity>0) {
       // Item is not in the user's cart; add it with the given quantity
       let unitPrice:number = 0;
-      if (itemDoc.cat==='bagel' && selection==='four'){
+      if (itemDoc.cat==='bagel' && selection==='six'){
         const tempItemDoc:BagelItem = itemDoc as BagelItem;
-        unitPrice = tempItemDoc.fourPrice;
+        unitPrice = tempItemDoc.sixPrice;
       }else if (itemDoc.cat==='bagel' && selection==='dozen'){
         const tempItemDoc:BagelItem = itemDoc as BagelItem;
         unitPrice = tempItemDoc.dozenPrice;
