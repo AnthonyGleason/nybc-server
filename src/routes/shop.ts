@@ -242,14 +242,13 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
             message: 'Forbidden',
           });
         };
-        console.log('cart', payload);
         cart = new Cart(
-          payload.cartPayload.cart.items,
-          payload.cartPayload.cart.subtotal,
-          payload.cartPayload.cart.tax /100, //convert tax in cents to x.xx (making it human readable)
-          payload.cartPayload.cart.promoCodeID || undefined,
-          payload.cartPayload.cart.discountAmount || 0,
-          payload.cartPayload.cart.finalPrice || 0
+          payload.cart.items,
+          payload.cart.subtotal,
+          payload.cart.tax /100, //convert tax in cents to x.xx (making it human readable)
+          payload.cart.promoCodeID || undefined,
+          payload.cart.discountAmount || 0,
+          payload.cart.finalPrice || 0
         );
       }
     );
