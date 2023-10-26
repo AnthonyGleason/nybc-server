@@ -18,11 +18,11 @@ export const shopRouter = Router();
 shopRouter.get('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    undefined,
-    undefined,
-    req.payload.cartPayload.cart.promoCodeID || undefined,
-    req.payload.cartPayload.cart.discountAmount || 0,
-    req.payload.cartPayload.cart.finalPrice || 0
+    req.payload.cartPayload.cart.subtotal,
+    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.promoCodeID,
+    req.payload.cartPayload.cart.discountAmount,
+    req.payload.cartPayload.cart.finalPrice
   );
   if (!cart.promoCodeID){
     res.status(HttpStatusCodes.NOT_FOUND);
@@ -48,11 +48,11 @@ shopRouter.get('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
 shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    undefined,
-    undefined,
-    req.payload.cartPayload.cart.promoCodeID || undefined,
-    req.payload.cartPayload.cart.discountAmount || 0,
-    req.payload.cartPayload.cart.finalPrice || 0
+    req.payload.cartPayload.cart.subtotal,
+    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.promoCodeID,
+    req.payload.cartPayload.cart.discountAmount,
+    req.payload.cartPayload.cart.finalPrice
   );
 
   const promoCodeInput:string = req.body.promoCodeInput;
@@ -127,11 +127,11 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
 shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    undefined,
-    undefined,
-    req.payload.cartPayload.cart.promoCodeID || undefined,
-    req.payload.cartPayload.cart.discountAmount || 0,
-    req.payload.cartPayload.cart.finalPrice || 0
+    req.payload.cartPayload.cart.subtotal,
+    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.promoCodeID,
+    req.payload.cartPayload.cart.discountAmount,
+    req.payload.cartPayload.cart.finalPrice
   );
   let paymentID = req.body.clientSecret.split('_secret_')[0]; 
   let paymentIntent:any = {};
@@ -245,10 +245,10 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
         cart = new Cart(
           payload.cart.items,
           payload.cart.subtotal,
-          payload.cart.tax /100, //convert tax in cents to x.xx (making it human readable)
-          payload.cart.promoCodeID || undefined,
-          payload.cart.discountAmount || 0,
-          payload.cart.finalPrice || 0
+          payload.cart.tax / 100, //make it human readable in $x.xx format
+          payload.cart.promoCodeID,
+          payload.cart.discountAmount,
+          payload.cart.finalPrice
         );
       }
     );
@@ -286,11 +286,11 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
   };
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    undefined,
-    undefined,
-    req.payload.cartPayload.cart.promoCodeID || undefined,
-    req.payload.cartPayload.cart.discountAmount || 0,
-    req.payload.cartPayload.cart.finalPrice || 0
+    req.payload.cartPayload.cart.subtotal,
+    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.promoCodeID,
+    req.payload.cartPayload.cart.discountAmount,
+    req.payload.cartPayload.cart.finalPrice
   );
   if (membershipDoc){
     await cart.cleanupCart(membershipDoc.tier);
@@ -312,11 +312,11 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
 shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authenticateCartToken, async(req:any,res,next)=>{
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    undefined,
-    undefined,
-    req.payload.cartPayload.cart.promoCodeID || undefined,
-    req.payload.cartPayload.cart.discountAmount || 0,
-    req.payload.cartPayload.cart.finalPrice || 0
+    req.payload.cartPayload.cart.subtotal,
+    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.promoCodeID,
+    req.payload.cartPayload.cart.discountAmount,
+    req.payload.cartPayload.cart.finalPrice
   );
   //need to cleanup cart before performing tax calculations
   try{
@@ -451,16 +451,17 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
   try{
     cart = new Cart(
       req.payload.cartPayload.cart.items,
-      undefined,
-      undefined,
-      req.payload.cartPayload.cart.promoCodeID || undefined,
-      req.payload.cartPayload.cart.discountAmount || 0,
+      req.payload.cartPayload.cart.subtotal,
+      req.payload.cartPayload.cart.tax,
+      req.payload.cartPayload.cart.promoCodeID,
+      req.payload.cartPayload.cart.discountAmount,
       req.payload.cartPayload.cart.finalPrice || 0
     );
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
     
     //cleanup cart
     await cart.cleanupCart(membershipTier);
+    console.log(cart);
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
@@ -518,11 +519,11 @@ shopRouter.post('/carts',(req,res,next)=>{
 shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any,res,next)=>{
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    undefined,
-    undefined,
-    req.payload.cartPayload.cart.promoCodeID || undefined,
-    req.payload.cartPayload.cart.discountAmount || 0,
-    req.payload.cartPayload.cart.finalPrice || 0
+    req.payload.cartPayload.cart.subtotal,
+    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.promoCodeID,
+    req.payload.cartPayload.cart.discountAmount,
+    req.payload.cartPayload.cart.finalPrice
   );
 
   //initialize the membership tier as a NonMember
@@ -563,11 +564,11 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
   //get cart from payload
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    undefined,
-    undefined,
-    req.payload.cartPayload.cart.promoCodeID || undefined,
-    req.payload.cartPayload.cart.discountAmount || 0,
-    req.payload.cartPayload.cart.finalPrice || 0
+    req.payload.cartPayload.cart.subtotal,
+    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.promoCodeID,
+    req.payload.cartPayload.cart.discountAmount,
+    req.payload.cartPayload.cart.finalPrice
   );
 
   //destructure the request body
