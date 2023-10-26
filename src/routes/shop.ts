@@ -103,10 +103,9 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
       paymentIntent = await stripe.paymentIntents.update(paymentID, {
         amount: Math.floor(cart.finalPrice*100), //convert to cents and round it down
         metadata: {
-          promoCodeID: promoCodeDoc._id
+          promoCodeID: promoCodeDoc._id.toString() //need to convert from ObjectID("") format to string
         },
       });
-
       //issue updating cart token
       const tempCartToken = issueCartJWTToken(cart);
       
