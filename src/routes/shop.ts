@@ -207,7 +207,6 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
 
     //get required properties to create the order doc from the payment intent
     const userID:string = paymentIntentSucceeded.metadata.userID;
-    const totalAmount:number = paymentIntentSucceeded.amount;
     const shippingAddress:Address = {
       line1: paymentIntentSucceeded.shipping.address.line1,
       line2: paymentIntentSucceeded.shipping.address.line2 || undefined,
@@ -219,7 +218,6 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
       fullName: paymentIntentSucceeded.metadata.customer_fullName
     }; 
     const giftMessage:string = paymentIntentSucceeded.metadata.giftMessage || '';
-    const promoCodeID:string = paymentIntentSucceeded.metadata.promoCodeID || '';
     
     //get cart token from memory
     let tempCartToken:TempCartToken | undefined= tempCartTokens.find((tempCartToken:TempCartToken)=>{
@@ -227,7 +225,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
     });
 
     //validate all required fields were provided
-    if (!tempCartToken||!shippingAddress||!totalAmount) throw new Error('One or more of the required fields were not provided.');
+    if (!tempCartToken||!shippingAddress) throw new Error('One or more of the required fields were not provided.');
 
     //remove the array item from memory
     tempCartTokens.splice(tempCartTokens.indexOf(tempCartToken),1);
@@ -244,6 +242,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
             message: 'Forbidden',
           });
         };
+        console.log('cart', payload);
         cart = new Cart(
           payload.cartPayload.cart.items,
           payload.cartPayload.cart.subtotal,
@@ -261,7 +260,6 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
     try{
       const orderDoc: Order = await createOrder(
         userID,
-        totalAmount,
         cart,
         shippingAddress,
         giftMessage

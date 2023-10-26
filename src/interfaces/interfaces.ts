@@ -58,7 +58,6 @@ export interface Order{
   dateCreated:Date,
   userID:string,
   status:string,
-  totalAmount:number,
   cart:CartInterface,
   shippingAddress:Address,
   trackingNumber?:string,

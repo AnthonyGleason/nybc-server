@@ -16,10 +16,6 @@ const OrderSchema = new mongoose.Schema({
     required: true,
     default: 'Pending',
   },
-  totalAmount:{
-    type: Number,
-    required:true
-  },
   cart:{
     type: Object,
     required: true
@@ -32,9 +28,6 @@ const OrderSchema = new mongoose.Schema({
     type: String
   },
   giftMessage:{
-    type: String,
-  },
-  promoCodeID:{
     type: String,
   }
 });

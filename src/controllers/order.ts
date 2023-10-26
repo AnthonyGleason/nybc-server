@@ -4,14 +4,12 @@ import { OrderModel } from "@src/models/Order";
 //create a new order
 export const createOrder = async function(
   userID:string,
-  totalAmount:number,
   cart:CartInterface,
   shippingAddress:Address,
   giftMessage?:string,
   ):Promise<Order>{
   return await OrderModel.create({
     userID: userID,
-    totalAmount:totalAmount,
     cart:cart,
     shippingAddress:shippingAddress,
     giftMessage:giftMessage
