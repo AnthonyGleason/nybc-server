@@ -255,6 +255,8 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
           payload.cart.discountAmount,
           payload.cart.finalPrice
         );
+        //we don't have a field for the total quantity calculations so we will calculate it here, we can just put this in the cart constructor
+        cart.calcTotalQuantity();
       }
     );
     
@@ -428,7 +430,7 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   };
 
   //calculate the tax amount
-  cart.tax = calculation.tax_amount_exclusive / 100;
+  cart.tax = calculation.tax_amount_exclusive;
   //re calculate the final price with the tax information
   cart.calcFinalPrice();
   //issue the cart token

@@ -60,6 +60,8 @@ export default class Cart{
 
   calcTotalQuantity = ():number=>{
     let totalQuantity:number = 0;
+    //break if cart is empty
+    if (!this.items) return totalQuantity;
     this.items.forEach((item:CartItem)=>{
       totalQuantity+=item.quantity;
     });
