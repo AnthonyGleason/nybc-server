@@ -106,6 +106,7 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
           promoCodeID: promoCodeDoc._id.toString() //need to convert from ObjectID("") format to string
         },
       });
+      
       //issue updating cart token
       const tempCartToken = issueCartJWTToken(cart);
       
@@ -232,7 +233,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
     tempCartTokens.splice(tempCartTokens.indexOf(tempCartToken),1);
 
     //get cart payload from token
-    let cart:CartInterface | undefined;
+    let cart:Cart | undefined;
     jwt.verify(
       tempCartToken.cartToken, process.env.SECRET as jwt.Secret,
       async (err:any, payload:any) => {
@@ -243,15 +244,19 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
             message: 'Forbidden',
           });
         };
-        cart = payload.cart;
+        cart = new Cart(
+          payload.cartPayload.cart.items,
+          payload.cartPayload.cart.subtotal,
+          payload.cartPayload.cart.tax /100, //convert tax in cents to x.xx (making it human readable)
+          payload.cartPayload.cart.promoCodeID || undefined,
+          payload.cartPayload.cart.discountAmount || 0,
+          payload.cartPayload.cart.finalPrice || 0
+        );
       }
     );
     
     //verify the cart was successfully validated
     if (!cart) throw new Error('A cart was not found or is not valid.');
-    
-    //now that we have the cart, update the tax (in the future this shouldnt be performed on this route)
-    cart.tax = paymentIntentSucceeded.metadata.tax_amount / 100; //convert tax in cents to x.xx (making it human readable)
     
     try{
       const orderDoc: Order = await createOrder(
@@ -259,8 +264,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
         totalAmount,
         cart,
         shippingAddress,
-        giftMessage,
-        promoCodeID
+        giftMessage
       );
       if (!orderDoc) throw new Error('An error has occured when updating the order doc.');
     }catch(err){
@@ -283,7 +287,7 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
   ){
     membershipDoc = await getMembershipByUserID(req.payload.loginPayload.user._id);
   };
-    const cart:Cart = new Cart(
+  const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
     undefined,
     undefined,
