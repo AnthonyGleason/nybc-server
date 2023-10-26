@@ -1,7 +1,7 @@
 import Cart from '@src/classes/Cart';
 import HttpStatusCodes from '@src/constants/HttpStatusCodes';
 import { getAllItems, getItemByID } from '@src/controllers/item';
-import { invalidatedTokens, issueCartJWTToken, tempCartTokens } from '@src/helpers/auth';
+import { deleteCartTokenByTempCartToken, getCartTokenByUserID, invalidatedTokens, issueCartJWTToken, storeTempCartToken, tempCartTokens } from '@src/helpers/auth';
 import { Router } from 'express'
 import { stripe } from '@src/util/stripe';
 import { authenticateCartToken, authenticateLoginToken, handleCartLoginAuth} from '@src/middlewares/auth';
@@ -106,10 +106,12 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
           promoCodeID: promoCodeDoc._id.toString() //need to convert from ObjectID("") format to string
         },
       });
-      
       //issue updating cart token
       const tempCartToken = issueCartJWTToken(cart);
-      
+      storeTempCartToken({
+        cartToken: tempCartToken,
+        userID: req.payload.loginPayload.user._id
+      });
       //respond to client with the updated token
       res.status(200).json({
         clientSecret: paymentIntent.client_secret,
@@ -158,6 +160,11 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
   };
   //issue updating cart token
   const tempCartToken = issueCartJWTToken(cart);
+  //update the tempCartTokens array in memory
+  storeTempCartToken({
+    cartToken: tempCartToken,
+    userID: req.payload.loginPayload.user._id
+  });
   //respond to client with the updated token
   res.status(200).json({
     clientSecret: paymentIntent.client_secret,
@@ -220,15 +227,13 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
     const giftMessage:string = paymentIntentSucceeded.metadata.giftMessage || '';
     
     //get cart token from memory
-    let tempCartToken:TempCartToken | undefined= tempCartTokens.find((tempCartToken:TempCartToken)=>{
-      if (tempCartToken.userID===userID) return true;
-    });
+    let tempCartToken:TempCartToken | undefined= getCartTokenByUserID(userID);
 
     //validate all required fields were provided
-    if (!tempCartToken||!shippingAddress) throw new Error('One or more of the required fields were not provided.');
+    if (!tempCartToken || !shippingAddress) throw new Error('One or more of the required fields were not provided.');
 
     //remove the array item from memory
-    tempCartTokens.splice(tempCartTokens.indexOf(tempCartToken),1);
+    deleteCartTokenByTempCartToken(tempCartToken);
 
     //get cart payload from token
     let cart:Cart | undefined;
@@ -255,7 +260,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
     
     //verify the cart was successfully validated
     if (!cart) throw new Error('A cart was not found or is not valid.');
-    
+    console.log('cart after webhook',cart);
     try{
       const orderDoc: Order = await createOrder(
         userID,
@@ -292,6 +297,7 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
     req.payload.cartPayload.cart.discountAmount,
     req.payload.cartPayload.cart.finalPrice
   );
+
   if (membershipDoc){
     await cart.cleanupCart(membershipDoc.tier);
     const tempCartToken:string = issueCartJWTToken(cart);
@@ -421,6 +427,17 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
 
+  //calculate the tax amount
+  cart.tax = calculation.tax_amount_exclusive / 100;
+  //re calculate the final price with the tax information
+  cart.calcFinalPrice();
+  //issue the cart token
+  const cartToken:string = issueCartJWTToken(cart);
+  //update the tempCartTokens array in memory
+  storeTempCartToken({
+    cartToken: cartToken,
+    userID: req.payload.loginPayload.user._id
+  });
   res.status(200).json({
     paymentIntentToken: paymentIntent.client_secret,
     taxAmount: calculation.tax_amount_exclusive,
@@ -461,7 +478,6 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
     
     //cleanup cart
     await cart.cleanupCart(membershipTier);
-    console.log(cart);
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
@@ -471,7 +487,7 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
     cartToken: req.tokens.cart,
     userID: req.payload.loginPayload.user._id
   };
-  tempCartTokens.push(tempCartToken);
+  storeTempCartToken(tempCartToken);
 
   try{
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
@@ -486,7 +502,6 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
     });
     //verify a payment intent was successfully created
     if (!paymentIntent) throw new Error('An error occured when creating a payment intent.');
-
     res.status(HttpStatusCodes.OK).json({ paymentIntentToken: paymentIntent.client_secret });
   }catch(err){
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);

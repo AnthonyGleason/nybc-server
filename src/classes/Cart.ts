@@ -78,7 +78,7 @@ export default class Cart{
   };
 
   calcFinalPrice = ():number=>{
-    let finalPrice:number = this.subtotal - this.discountAmount;
+    let finalPrice:number = this.subtotal - this.discountAmount + this.tax;
     this.finalPrice = finalPrice;
     return finalPrice;
   };
