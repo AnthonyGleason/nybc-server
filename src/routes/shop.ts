@@ -112,6 +112,7 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
         cartToken: tempCartToken,
         userID: req.payload.loginPayload.user._id
       });
+      console.log('cart after updating promo', cart);
       //respond to client with the updated token
       res.status(200).json({
         clientSecret: paymentIntent.client_secret,
@@ -165,6 +166,7 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
     cartToken: tempCartToken,
     userID: req.payload.loginPayload.user._id
   });
+  console.log('cart after removing promo',cart);
   //respond to client with the updated token
   res.status(200).json({
     clientSecret: paymentIntent.client_secret,
@@ -247,6 +249,8 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
             message: 'Forbidden',
           });
         };
+        console.log('tax', payload.cart.tax / 100);
+        console.log('final price',payload.cart.finalPrice);
         cart = new Cart(
           payload.cart.items,
           payload.cart.subtotal,
@@ -315,6 +319,7 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
       cart: cart
     });
   };
+  console.log('cart after applied membership pricing',cart);
 });
 
 shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authenticateCartToken, async(req:any,res,next)=>{
@@ -398,7 +403,6 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   }catch(err){
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
-  
   try{
     // Update the PaymentIntent if one already exists for this cart.
     if (paymentID) {
@@ -406,7 +410,7 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
         amount: calculation.amount_total,
         metadata: {
           tax_calculation: calculation.id,
-          tax_amount: calculation.tax_amount_exclusive,
+          tax_amount: calculation.tax_amount_exclusive, //should be in cents
           customer_phone: address.phone,
           customer_fullName: address.fullName
         }
@@ -430,11 +434,12 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   };
 
   //calculate the tax amount
-  cart.tax = calculation.tax_amount_exclusive;
+  cart.tax = calculation.tax_amount_exclusive / 100; //convert to $x.xx format 
   //re calculate the final price with the tax information
   cart.calcFinalPrice();
   //issue the cart token
   const cartToken:string = issueCartJWTToken(cart);
+  console.log('cart after calculating tax',cart);
   //update the tempCartTokens array in memory
   storeTempCartToken({
     cartToken: cartToken,
@@ -490,7 +495,7 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
     userID: req.payload.loginPayload.user._id
   };
   storeTempCartToken(tempCartToken);
-
+  console.log('cart after creating payment intent',cart);
   try{
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
     const finalPriceInCents:number = Math.floor(cart.finalPrice * 100);
