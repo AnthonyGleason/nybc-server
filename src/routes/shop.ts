@@ -249,12 +249,12 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
             message: 'Forbidden',
           });
         };
-        console.log('tax', payload.cart.tax / 100);
+        console.log('tax', payload.cart.tax);
         console.log('final price',payload.cart.finalPrice);
         cart = new Cart(
           payload.cart.items,
           payload.cart.subtotal,
-          payload.cart.tax / 100, //make it human readable in $x.xx format
+          payload.cart.tax, //make it human readable in $x.xx format
           payload.cart.promoCodeID,
           payload.cart.discountAmount,
           payload.cart.finalPrice
