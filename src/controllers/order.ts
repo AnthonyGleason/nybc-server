@@ -31,6 +31,14 @@ export const getAllOrdersByUserID = async function(userID:string):Promise<Order[
   return await OrderModel.find({userID: userID});
 };
 
+//return the most recent order
+export const getMostRecentOrderByUserID = async function(userID: string): Promise<Order | null> {
+  return await OrderModel
+    .findOne({ userID: userID })
+    .sort({ dateCreated: -1 }) // Sort in descending order
+    .exec();
+};
+
 //get all pending orders
 export const getAllPendingOrders = async function():Promise<Order[] | null>{
   return await OrderModel.find({status: 'Pending'});

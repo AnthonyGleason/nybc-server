@@ -1,5 +1,5 @@
 import { createNewUser, getUserByEmail, getUserByID, updateUserByUserID } from "@src/controllers/user";
-import {Membership, PasswordReset, User} from "@src/interfaces/interfaces";
+import {Membership, Order, PasswordReset, User} from "@src/interfaces/interfaces";
 import { Router } from "express";
 import bcrypt from 'bcrypt';
 import HttpStatusCodes from "@src/constants/HttpStatusCodes";
@@ -10,6 +10,7 @@ import { transporter } from "@src/server";
 import { salt } from "@src/constants/auth";
 import { handleError } from "@src/helpers/error";
 import { getNewRegistrationMailOptions, getPasswordResetMailOptions } from "@src/constants/emails";
+import { getMostRecentOrderByUserID } from "@src/controllers/order";
 
 const usersRouter = Router();
 
@@ -350,6 +351,16 @@ usersRouter.put('/settings', authenticateLoginToken, async (req:any,res,next)=>{
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
+});
+
+
+usersRouter.get('/orders/mostRecent',authenticateLoginToken, async (req:any,res,next)=>{
+  const mostRecentOrder:Order | null = await getMostRecentOrderByUserID(req.payload.loginPayload.user._id);
+  if (mostRecentOrder){
+    res.status(HttpStatusCodes.OK).json({orderData: mostRecentOrder});
+  }else{
+    res.status(HttpStatusCodes.NOT_FOUND);
+  }
 });
 
 export default usersRouter;
