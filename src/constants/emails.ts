@@ -19,7 +19,7 @@ export const getPasswordResetMailOptions = function(email:string){
 
   //create the password reset object
   const passwordReset:PasswordReset = {
-    dateCreated: new Date(),
+    dateCreated: new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
     resetID: randomString,
     email: email
   };

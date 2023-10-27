@@ -62,7 +62,7 @@ usersRouter.post('/register', async(req,res,next)=>{
       lastName,
       email,
       hashedPassword,
-      new Date(),
+      new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
       false,
     );
 
@@ -165,7 +165,7 @@ usersRouter.get('/forgotPassword/:resetID',(req,res,next)=>{
     if (!foundItem) throw new Error('Password reset item not found. Please make another password reset request to proceed.');
     
     //calculate expired status
-    const currentTime = new Date(); // Get the current time
+    const currentTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })); // Get the current time
     const tenMinutesAgo = new Date(currentTime.getTime() - 10 * 60 * 1000); // Calculate time 10 minutes ago
     const dateCreated = new Date(foundItem.dateCreated);
     isExpired = dateCreated <= tenMinutesAgo;
@@ -193,7 +193,7 @@ usersRouter.put('/forgotPassword/:resetID', async (req,res,next)=>{
     if (!foundItem) throw new Error('Password reset item not found. Please make another password reset request to proceed.');
 
     //determine if token is expired
-    const currentTime = new Date(); // Get the current time
+    const currentTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })); // Get the current time in eastern
     const tenMinutesAgo = new Date(currentTime.getTime() - 10 * 60 * 1000); // Calculate time 10 minutes ago
     const dateCreated = new Date(foundItem.dateCreated);
     isExpired = dateCreated <= tenMinutesAgo;

@@ -7,7 +7,7 @@ const PromoCodeSchema = new mongoose.Schema({
   },
   dateOfExpiry:{
     type:Date,
-    default: new Date(), //if a date wasn't provided the code instantly expires
+    default: new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })), //if a date wasn't provided the code instantly expires
     required: true
   },
   totalAllowedUses:{

@@ -75,7 +75,7 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
     
     try{
       //ensure promo code is not expired
-      if (promoCodeDoc.dateOfExpiry < new Date()) throw new Error('The promo code is expired.');
+      if (promoCodeDoc.dateOfExpiry < new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))) throw new Error('The promo code is expired.');
       if (promoCodeDoc.totalAllowedUses && (promoCodeDoc.totalAllowedUses<promoCodeDoc.totalTimesUsed)) throw new Error('The promo code is out of uses.');
     }catch(err){
       handleError(res,HttpStatusCodes.FORBIDDEN,err);
