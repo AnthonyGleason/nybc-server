@@ -24,7 +24,7 @@ const UserSchema = new mongoose.Schema({
   dateCreated:{
     type: Date,
     required: true,
-    default: Date.now(),
+    default: new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
   },
   frozen:{
     type:Boolean,
