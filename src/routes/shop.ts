@@ -112,7 +112,6 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
         cartToken: tempCartToken,
         userID: req.payload.loginPayload.user._id
       });
-      console.log('cart after updating promo', cart);
       //respond to client with the updated token
       res.status(200).json({
         clientSecret: paymentIntent.client_secret,
@@ -166,7 +165,6 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
     cartToken: tempCartToken,
     userID: req.payload.loginPayload.user._id
   });
-  console.log('cart after removing promo',cart);
   //respond to client with the updated token
   res.status(200).json({
     clientSecret: paymentIntent.client_secret,
@@ -249,8 +247,6 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
             message: 'Forbidden',
           });
         };
-        console.log('tax', payload.cart.tax);
-        console.log('final price',payload.cart.finalPrice);
         cart = new Cart(
           payload.cart.items,
           payload.cart.subtotal,
@@ -266,7 +262,6 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
     
     //verify the cart was successfully validated
     if (!cart) throw new Error('A cart was not found or is not valid.');
-    console.log('cart after webhook',cart);
     try{
       const orderDoc: Order = await createOrder(
         userID,
@@ -319,7 +314,6 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
       cart: cart
     });
   };
-  console.log('cart after applied membership pricing',cart);
 });
 
 shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authenticateCartToken, async(req:any,res,next)=>{
@@ -439,7 +433,6 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   cart.calcFinalPrice();
   //issue the cart token
   const cartToken:string = issueCartJWTToken(cart);
-  console.log('cart after calculating tax',cart);
   //update the tempCartTokens array in memory
   storeTempCartToken({
     cartToken: cartToken,
@@ -495,7 +488,6 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
     userID: req.payload.loginPayload.user._id
   };
   storeTempCartToken(tempCartToken);
-  console.log('cart after creating payment intent',cart);
   try{
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
     const finalPriceInCents:number = Math.floor(cart.finalPrice * 100);
