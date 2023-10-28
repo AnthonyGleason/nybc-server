@@ -95,3 +95,9 @@ export interface PromoCode{
   perk: string, // for example "Free Shipping", "15% Off", "$25 Off",
   _id: string //mongodb unique id
 };
+
+export interface PendingOrder{
+  cartToken:string,
+  userID:string,
+  _id: string | mongoose.Types.ObjectId //mongodb unique id
+}
