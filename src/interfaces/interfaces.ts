@@ -99,5 +99,6 @@ export interface PromoCode{
 export interface PendingOrder{
   cartToken:string,
   userID:string,
+  dateCreated: Date,
   _id: string | mongoose.Types.ObjectId //mongodb unique id
 }

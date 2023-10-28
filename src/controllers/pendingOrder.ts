@@ -11,7 +11,6 @@ export const createPendingOrderDoc = async function(cartToken:string,userID:stri
 
 //get a pending order doc by cart token
 export const getPendingOrderDocByCartToken = async function(cartToken:string):Promise<PendingOrder | null>{
-  console.log(cartToken);
   return await PendingOrderModel.findOne({
     cartToken: cartToken
   });
