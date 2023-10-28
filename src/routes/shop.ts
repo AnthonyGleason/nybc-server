@@ -239,10 +239,12 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
       fullName: paymentIntentSucceeded.metadata.customer_fullName
     }; 
     const giftMessage:string = paymentIntentSucceeded.metadata.giftMessage || '';
-    
+    const pendingOrderDocID:string = paymentIntentSucceeded.metadata.pendingOrderID;
+    console.log('payment intent metadata',paymentIntentSucceeded.metadata);
+    console.log('pending order doc id',pendingOrderDocID);
     //get pending order from mongoDB
-    let pendingOrder:PendingOrder | null = await getPendingOrderDocByDocID(paymentIntentSucceeded.metadata.pendingOrderID);
-    
+    let pendingOrder:PendingOrder | null = await getPendingOrderDocByDocID(pendingOrderDocID);
+    console.log(pendingOrder);
     //validate all required fields were provided
     if (!pendingOrder || !shippingAddress) throw new Error('One or more of the required fields were not provided.');
 
