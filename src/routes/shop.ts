@@ -517,6 +517,7 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
     if (!pendingOrderDoc) throw new Error('A pending order doc was not found!');
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
     const finalPriceInCents:number = Math.floor(cart.finalPrice * 100);
+    console.log('create payment intent pending order doc', pendingOrderDoc);
     //create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: finalPriceInCents,
