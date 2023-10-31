@@ -13,6 +13,8 @@ import jwt from 'jsonwebtoken';
 import { handleError } from '@src/helpers/error';
 import { getPromoCodeByCode, getPromoCodeByID, updatePromoCodeByID } from '@src/controllers/promocode';
 import { createPendingOrderDoc, deletePendingOrderDocByCartToken, getPendingOrderDocByCartToken, getPendingOrderDocByDocID, updatePendingOrderDocByDocID } from '@src/controllers/pendingOrder';
+import { getCustomOrderMailOptions } from '@src/constants/emails';
+import { transporter } from "@src/server";
 
 export const shopRouter = Router();
 
@@ -704,6 +706,32 @@ shopRouter.get('/item/:itemID', async (req,res,next)=>{
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
+});
+
+//request a personalized order
+shopRouter.post('/orders/custom',async(req:any,res,next)=>{
+  const {
+    emailInput,
+    requestInput
+  }:{
+    emailInput:string,
+    requestInput:string
+  } = req.body;
+
+  //validate inputs
+  try{
+    if (!emailInput) throw new Error('No email input was recieved.');
+    if (!requestInput) throw new Error('No request input was recieved.');
+  }catch(err){
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
+  };
+
+  //send email to sales team
+  const salesEmail:string = 'sales@nybagelsclub.com';
+  await transporter.sendMail(getCustomOrderMailOptions(salesEmail,requestInput,emailInput));
+
+  //respond to client
+  res.status(HttpStatusCodes.OK);
 });
 
 //get order by order id (users)

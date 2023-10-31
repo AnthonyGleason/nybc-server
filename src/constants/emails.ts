@@ -11,6 +11,15 @@ export const getNewRegistrationMailOptions = function(email:string){
   })
 };
 
+export const getCustomOrderMailOptions = function(salesEmail:string,request:string,userEmail:string){
+  return({
+    from: 'noreply@nybagelsclub.com',
+    to: salesEmail,
+    subject: 'Personalized Order Request',
+    text: `A user with the email "${userEmail}" has requested a custom order with the following message "${request}"`,
+  })
+};
+
 export const getPasswordResetMailOptions = function(email:string){
   const randomString:string = getRandomUrlString(50);
 
