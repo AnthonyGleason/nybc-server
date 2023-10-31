@@ -717,7 +717,6 @@ shopRouter.post('/orders/custom',async(req:any,res,next)=>{
     emailInput:string,
     requestInput:string
   } = req.body;
-
   //validate inputs
   try{
     if (!emailInput) throw new Error('No email input was recieved.');
@@ -729,9 +728,9 @@ shopRouter.post('/orders/custom',async(req:any,res,next)=>{
   //send email to sales team
   const salesEmail:string = 'sales@nybagelsclub.com';
   await transporter.sendMail(getCustomOrderMailOptions(salesEmail,requestInput,emailInput));
-
-  //respond to client
-  res.status(HttpStatusCodes.OK);
+  
+  //respond to client  *** needs an empty response body or the client doesn't properly recieve the response
+  res.status(HttpStatusCodes.OK).json({});
 });
 
 //get order by order id (users)
