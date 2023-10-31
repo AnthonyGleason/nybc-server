@@ -729,7 +729,7 @@ shopRouter.post('/orders/custom',async(req:any,res,next)=>{
   };
 
   //send email to sales team
-  const salesEmail:string = 'anthonygleason@nybagelsclub.com';
+  const salesEmail:string = 'sales@nybagelsclub.com';
   await transporter.sendMail(getCustomOrderMailOptions(salesEmail,requestInput,emailInput,quantityInput));
   
   //respond to client  *** needs an empty response body or the client doesn't properly recieve the response
