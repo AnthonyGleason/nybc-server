@@ -21,11 +21,11 @@ export const shopRouter = Router();
 shopRouter.get('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    req.payload.cartPayload.cart.subtotal,
-    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.subtotalInDollars,
+    req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
-    req.payload.cartPayload.cart.discountAmount,
-    req.payload.cartPayload.cart.finalPrice
+    req.payload.cartPayload.cart.discountAmountInDollars,
+    req.payload.cartPayload.cart.finalPriceInDollars
   );
   if (!cart.promoCodeID){
     res.status(HttpStatusCodes.NOT_FOUND);
@@ -51,11 +51,11 @@ shopRouter.get('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
 shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    req.payload.cartPayload.cart.subtotal,
-    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.subtotalInDollars,
+    req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
-    req.payload.cartPayload.cart.discountAmount,
-    req.payload.cartPayload.cart.finalPrice
+    req.payload.cartPayload.cart.discountAmountInDollars,
+    req.payload.cartPayload.cart.finalPriceInDollars
   );
 
   const promoCodeInput:string = req.body.promoCodeInput;
@@ -139,11 +139,11 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
 shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,async(req:any,res,next)=>{
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    req.payload.cartPayload.cart.subtotal,
-    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.subtotalInDollars,
+    req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
-    req.payload.cartPayload.cart.discountAmount,
-    req.payload.cartPayload.cart.finalPrice
+    req.payload.cartPayload.cart.discountAmountInDollars,
+    req.payload.cartPayload.cart.finalPriceInDollars
   );
   let paymentID = req.body.clientSecret.split('_secret_')[0]; 
   let paymentIntent:any = {};
@@ -306,11 +306,11 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
   };
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    req.payload.cartPayload.cart.subtotal,
-    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.subtotalInDollars,
+    req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
-    req.payload.cartPayload.cart.discountAmount,
-    req.payload.cartPayload.cart.finalPrice
+    req.payload.cartPayload.cart.discountAmountInDollars,
+    req.payload.cartPayload.cart.finalPriceInDollars
   );
 
   if (membershipDoc){
@@ -333,11 +333,11 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
 shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authenticateCartToken, async(req:any,res,next)=>{
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    req.payload.cartPayload.cart.subtotal,
-    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.subtotalInDollars,
+    req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
-    req.payload.cartPayload.cart.discountAmount,
-    req.payload.cartPayload.cart.finalPrice
+    req.payload.cartPayload.cart.discountAmountInDollars,
+    req.payload.cartPayload.cart.finalPriceInDollars
   );
   //need to cleanup cart before performing tax calculations
   try{
@@ -493,11 +493,11 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
   try{
     cart = new Cart(
       req.payload.cartPayload.cart.items,
-      req.payload.cartPayload.cart.subtotal,
-      req.payload.cartPayload.cart.tax,
+      req.payload.cartPayload.cart.subtotalInDollars,
+      req.payload.cartPayload.cart.taxInDollars,
       req.payload.cartPayload.cart.promoCodeID,
-      req.payload.cartPayload.cart.discountAmount,
-      req.payload.cartPayload.cart.finalPrice || 0
+      req.payload.cartPayload.cart.discountAmountInDollars,
+      req.payload.cartPayload.cart.finalPriceInDollars || 0
     );
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
     
@@ -565,11 +565,11 @@ shopRouter.post('/carts',(req,res,next)=>{
 shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any,res,next)=>{
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    req.payload.cartPayload.cart.subtotal,
-    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.subtotalInDollars,
+    req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
-    req.payload.cartPayload.cart.discountAmount,
-    req.payload.cartPayload.cart.finalPrice
+    req.payload.cartPayload.cart.discountAmountInDollars,
+    req.payload.cartPayload.cart.finalPriceInDollars
   );
 
   //initialize the membership tier as a NonMember
@@ -607,14 +607,15 @@ shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any
 shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:any,res,next)=>{
   let userDoc:User | null = null;
   let membershipTier:string = 'Non-Member';
+  
   //get cart from payload
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
-    req.payload.cartPayload.cart.subtotal,
-    req.payload.cartPayload.cart.tax,
+    req.payload.cartPayload.cart.subtotalInDollars,
+    req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
-    req.payload.cartPayload.cart.discountAmount,
-    req.payload.cartPayload.cart.finalPrice
+    req.payload.cartPayload.cart.discountAmountInDollars,
+    req.payload.cartPayload.cart.finalPriceInDollars
   );
 
   //destructure the request body
