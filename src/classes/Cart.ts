@@ -12,15 +12,15 @@ export default class Cart{
 
   constructor(
     cartItems?:CartItem[],
-    subtotal?:number,
-    tax?:number,
+    subtotalInDollars?:number,
+    taxInDollars?:number,
     promoCodeID?:string,
     discountAmountInDollars?:number,
     finalPriceInDollars?:number
   ){
     this.items = cartItems || [];
-    this.subtotalInDollars = subtotal || 0;
-    this.taxInDollars = tax || 0;
+    this.subtotalInDollars = subtotalInDollars || 0;
+    this.taxInDollars = taxInDollars || 0;
     this.totalQuantity = 0;
     this.promoCodeID = promoCodeID || ''; 
     this.discountAmountInDollars = discountAmountInDollars || 0;
