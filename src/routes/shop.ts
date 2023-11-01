@@ -261,11 +261,11 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
         };
         cart = new Cart(
           payload.cart.items,
-          payload.cart.subtotal,
-          payload.cart.tax, //make it human readable in $x.xx format
+          payload.cart.subtotalInDollars,
+          payload.cart.taxInDollars,
           payload.cart.promoCodeID,
-          payload.cart.discountAmount,
-          payload.cart.finalPrice
+          payload.cart.discountAmountInDollars,
+          payload.cart.finalPriceInDollars
         );
         //we don't have a field for the total quantity calculations so we will calculate it here, we can just put this in the cart constructor
         cart.calcTotalQuantity();
