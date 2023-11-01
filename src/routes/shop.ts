@@ -116,9 +116,9 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
       //store the new cart token
       let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByCartToken(req.tokens.cart);
       if (!pendingOrderDoc){
-        pendingOrderDoc = await createPendingOrderDoc(req.tokens.cart,req.payload.loginPayload.user._id);
+        pendingOrderDoc = await createPendingOrderDoc(tempCartToken,req.payload.loginPayload.user._id);
       }else{
-        pendingOrderDoc.cartToken = req.tokens.cart;
+        pendingOrderDoc.cartToken = tempCartToken;
         pendingOrderDoc = await updatePendingOrderDocByDocID(pendingOrderDoc._id as string,pendingOrderDoc);
       };
 
@@ -171,13 +171,14 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
 
   //issue updating cart token
   const tempCartToken = issueCartJWTToken(cart);
+  //attempt to get a pending order doc
+  let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByCartToken(req.tokens.cart);
 
   //store the new cart token
-  let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByCartToken(req.tokens.cart);
   if (!pendingOrderDoc){
-    pendingOrderDoc = await createPendingOrderDoc(req.tokens.cart,req.payload.loginPayload.user._id);
+    pendingOrderDoc = await createPendingOrderDoc(tempCartToken,req.payload.loginPayload.user._id);
   }else{
-    pendingOrderDoc.cartToken = req.tokens.cart;
+    pendingOrderDoc.cartToken = tempCartToken;
     pendingOrderDoc = await updatePendingOrderDocByDocID(pendingOrderDoc._id as string,pendingOrderDoc);
   };
 
@@ -451,15 +452,18 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   //re calculate the final price with the tax information
   cart.calcFinalPrice();
 
+  //issue updating cart token
+  const tempCartToken = issueCartJWTToken(cart);
+
   //store the new cart token
   let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByCartToken(req.tokens.cart);
 
   if (!pendingOrderDoc){
     //a doc does not exist
-    pendingOrderDoc = await createPendingOrderDoc(req.tokens.cart,req.payload.loginPayload.user._id);
+    pendingOrderDoc = await createPendingOrderDoc(tempCartToken,req.payload.loginPayload.user._id);
   }else{
     //a doc already exists 
-    pendingOrderDoc.cartToken = req.tokens.cart;
+    pendingOrderDoc.cartToken = tempCartToken;
     pendingOrderDoc = await updatePendingOrderDocByDocID(pendingOrderDoc._id as string,pendingOrderDoc);
   };
 
