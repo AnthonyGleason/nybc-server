@@ -34,7 +34,7 @@ shopRouter.get('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
     const promoDoc:PromoCode | null = await getPromoCodeByID(cart.promoCodeID);
     if (promoDoc){
       //get discount amount obtained by reversing the discount
-      const discountAmount:number = cart.discountAmount;
+      const discountAmount:number = cart.discountAmountInDollars;
       //get promo code input (name of code) for client
       const promoCodeName:string = promoDoc.code;
       //get is promo applied to cart bool
@@ -104,7 +104,7 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
 
       // Update the PaymentIntent if one already exists for this cart.
       paymentIntent = await stripe.paymentIntents.update(paymentID, {
-        amount: Math.floor(cart.finalPrice*100), //convert to cents and round it down
+        amount: Math.floor(cart.finalPriceInDollars*100), //convert to cents and round it down
         metadata: {
           promoCodeID: promoCodeDoc._id.toString() //need to convert from ObjectID("") format to string
         },
@@ -151,7 +151,7 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
   //get membership tier and apply membership discount
   const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
 
-  cart.discountAmount = 0;
+  cart.discountAmountInDollars = 0;
   cart.promoCodeID = '';
   await cart.cleanupCart(membershipDoc?.tier || '');
 
@@ -160,7 +160,7 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
     if (!paymentIntent) throw new Error('There was an error obtaining the payment intent.');
     // Update the PaymentIntent if one already exists for this cart.
     paymentIntent = await stripe.paymentIntents.update(paymentID, {
-      amount: Math.floor(cart.finalPrice*100), //convert to cents and round it down
+      amount: Math.floor(cart.finalPriceInDollars*100), //convert to cents and round it down
       metadata: {
         promoCodeID: ''
       },
@@ -185,7 +185,7 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
   res.status(200).json({
     clientSecret: paymentIntent.client_secret,
     cartToken: tempCartToken,
-    discountAmount: cart.discountAmount
+    discountAmount: cart.discountAmountInDollars
   });
 });
 
@@ -377,16 +377,18 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
 
   // Convert each cart item to a Stripe line item object
   const lineItems = cart.items.map((cartItem: CartItem, index: number) => {
-    const adjustedUnitPrice:number = cartItem.unitPrice * discountMultiplier;
-    const adjustedUnitPriceWithDiscount:number = cartItem.unitPrice - adjustedUnitPrice
-    const totalAmount:number = adjustedUnitPriceWithDiscount * cartItem.quantity;
-    const totalAmountInCents:number = Math.floor(totalAmount*100);
+
+    //calculate the total cost in cents for each item
+    const adjustedUnitPriceInDollars:number = cartItem.unitPriceInDollars * discountMultiplier;
+    const adjustedUnitPriceWithDiscountInDollars:number = cartItem.unitPriceInDollars - adjustedUnitPriceInDollars
+    const totalAmountInDollars:number = adjustedUnitPriceWithDiscountInDollars * cartItem.quantity;
+    const totalAmountInCents:number = Math.floor(totalAmountInDollars*100);
 
     return {
       reference: index,
       amount: totalAmountInCents,
       quantity: cartItem.quantity
-    }
+    };
   });
   
   try{
@@ -411,6 +413,7 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   }catch(err){
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
+
   try{
     // Update the PaymentIntent if one already exists for this cart.
     if (paymentID) {
@@ -441,8 +444,8 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
 
-  //calculate the tax amount
-  cart.tax = calculation.tax_amount_exclusive / 100; //convert to $x.xx format 
+  //calculate the tax amount IN DOLLARS
+  cart.taxInDollars = calculation.tax_amount_exclusive / 100; //convert to $x.xx format, the tax_amount_exclusive is in cents
   //re calculate the final price with the tax information
   cart.calcFinalPrice();
   //issue the cart token
@@ -450,10 +453,13 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
 
   //store the new cart token
   let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByCartToken(req.tokens.cart);
+
   if (!pendingOrderDoc){
-    pendingOrderDoc = await createPendingOrderDoc(req.tokens.cart,req.payload.loginPayload.user._id);
+    //a doc does not exist already create one with the newly created temp cart token
+    pendingOrderDoc = await createPendingOrderDoc(tempCartToken,req.payload.loginPayload.user._id);
   }else{
-    pendingOrderDoc.cartToken = req.tokens.cart;
+    //a doc already exists 
+    pendingOrderDoc.cartToken = tempCartToken;
     pendingOrderDoc = await updatePendingOrderDocByDocID(pendingOrderDoc._id as string,pendingOrderDoc);
   };
 
@@ -515,7 +521,7 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
   try{
     if (!pendingOrderDoc) throw new Error('A pending order doc was not found!');
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
-    const finalPriceInCents:number = Math.floor(cart.finalPrice * 100);
+    const finalPriceInCents:number = Math.floor(cart.finalPriceInDollars * 100);
     //create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: finalPriceInCents,
@@ -664,8 +670,7 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
       const promoCodeDoc:PromoCode | null = await getPromoCodeByID(cart.promoCodeID);
     
       //apply promo code
-      const discountAmount:number = cart.calcPromoCodeDiscountAmount(promoCodeDoc?.perk || '');
-      cart.discountAmount = discountAmount;
+      cart.discountAmountInDollars = cart.calcPromoCodeDiscountAmount(promoCodeDoc?.perk || '');
     };
 
     //invalidate the old cart token

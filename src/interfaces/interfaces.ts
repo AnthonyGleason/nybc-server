@@ -32,7 +32,7 @@ export interface CartItem{
   itemData: BagelItem | SpreadItem,
   selection?: string
   quantity: number,
-  unitPrice: number,
+  unitPriceInDollars: number,
 };
 
 export interface Address{
@@ -48,9 +48,12 @@ export interface Address{
 
 export interface CartInterface{
   items:CartItem[];
-  subtotal:number;
-  tax:number;
+  subtotalInDollars:number;
+  taxInDollars:number;
   totalQuantity:number;
+  promoCodeID: string,
+  discountAmountInDollars:number;
+  finalPriceInDollars:number;
 };
 
 //order

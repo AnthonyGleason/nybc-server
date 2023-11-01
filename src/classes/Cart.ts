@@ -3,39 +3,39 @@ import { BagelItem, CartItem, SpreadItem } from "@src/interfaces/interfaces";
 
 export default class Cart{
   items:CartItem[];
-  subtotal:number;
-  tax:number;
+  subtotalInDollars:number;
+  taxInDollars:number;
   totalQuantity:number;
   promoCodeID:string;
-  discountAmount:number;
-  finalPrice:number;
+  discountAmountInDollars:number;
+  finalPriceInDollars:number;
 
   constructor(
     cartItems?:CartItem[],
     subtotal?:number,
     tax?:number,
     promoCodeID?:string,
-    discountAmount?:number,
-    finalPrice?:number
+    discountAmountInDollars?:number,
+    finalPriceInDollars?:number
   ){
     this.items = cartItems || [];
-    this.subtotal = subtotal || 0;
-    this.tax = tax || 0;
+    this.subtotalInDollars = subtotal || 0;
+    this.taxInDollars = tax || 0;
     this.totalQuantity = 0;
     this.promoCodeID = promoCodeID || ''; 
-    this.discountAmount = discountAmount || 0;
-    this.finalPrice = finalPrice || 0;
+    this.discountAmountInDollars = discountAmountInDollars || 0;
+    this.finalPriceInDollars = finalPriceInDollars || 0;
   };
 
   applyPromoPerk = (perk:string):void=>{
     switch(perk){
       case '25_PERCENT_OFF':
         for (let cartItem of this.items){
-          cartItem.unitPrice = cartItem.unitPrice - (cartItem.unitPrice * 0.25);
+          cartItem.unitPriceInDollars = cartItem.unitPriceInDollars - (cartItem.unitPriceInDollars * 0.25);
         };
         break;
       default:
-        console.log('promo code not handled',perk);
+        if (perk) console.log('promo code not handled',perk); //if a perk was declared but not handled log it
     };
   };
 
@@ -50,12 +50,12 @@ export default class Cart{
   };
 
   calcPromoCodeDiscountAmount = (perk:string):number =>{
-    let discountAmount:number = 0;
+    let discountAmountTotal:number = 0;
     for (let cartItem of this.items){
-      discountAmount += ((cartItem.unitPrice * cartItem.quantity) * this.getPromoCodeDiscountMultiplier(perk));
+      discountAmountTotal += ((cartItem.unitPriceInDollars * cartItem.quantity) * this.getPromoCodeDiscountMultiplier(perk));
     };
-    this.discountAmount = discountAmount;
-    return discountAmount;
+    this.discountAmountInDollars = discountAmountTotal;
+    return discountAmountTotal;
   };
 
   calcTotalQuantity = ():number=>{
@@ -73,16 +73,15 @@ export default class Cart{
     let totalPrice:number = 0;
     //verify there are items in the cart
     this.items.forEach((cartItem:CartItem)=>{
-      totalPrice += cartItem.unitPrice * cartItem.quantity;
+      totalPrice += cartItem.unitPriceInDollars * cartItem.quantity;
     });
-    this.subtotal = totalPrice;
+    this.subtotalInDollars = totalPrice;
     return totalPrice;
   };
 
   calcFinalPrice = ():number=>{
-    let finalPrice:number = this.subtotal - this.discountAmount + this.tax;
-    this.finalPrice = finalPrice;
-    return finalPrice;
+    this.finalPriceInDollars = this.subtotalInDollars - this.discountAmountInDollars + this.taxInDollars;
+    return this.finalPriceInDollars;
   };
 
   isCartEmpty = ():boolean=>{
@@ -114,13 +113,13 @@ export default class Cart{
       //handle applying the discount based on the item type
       if (cartItem.itemData.cat==='bagel' && cartItem.selection === 'six') {
         const tempItemData:BagelItem = cartItem.itemData as BagelItem;
-        cartItem.unitPrice = tempItemData.sixPrice - (tempItemData.sixPrice * discountMultiplier);
+        cartItem.unitPriceInDollars = tempItemData.sixPrice - (tempItemData.sixPrice * discountMultiplier);
       } else if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'dozen') {
         const tempItemData:BagelItem = cartItem.itemData as BagelItem;
-        cartItem.unitPrice = tempItemData.dozenPrice - (tempItemData.dozenPrice * discountMultiplier);
+        cartItem.unitPriceInDollars = tempItemData.dozenPrice - (tempItemData.dozenPrice * discountMultiplier);
       } else if (cartItem.itemData.cat === 'spread') {
         const tempItemData:SpreadItem = cartItem.itemData as SpreadItem;
-        cartItem.unitPrice = tempItemData.price - (tempItemData.price * discountMultiplier);
+        cartItem.unitPriceInDollars = tempItemData.price - (tempItemData.price * discountMultiplier);
       };
     });
   };
@@ -187,20 +186,20 @@ export default class Cart{
           cartItem.selection === 'six'
         ) {
           const tempItemData = itemData as BagelItem;
-          cartItem.unitPrice = tempItemData.sixPrice;
+          cartItem.unitPriceInDollars = tempItemData.sixPrice;
         } 
         else if (
           cartItem.itemData.cat === 'bagel' && 
           cartItem.selection === 'dozen'
         ) {
           const tempItemData = itemData as BagelItem;
-          cartItem.unitPrice = tempItemData.dozenPrice;
+          cartItem.unitPriceInDollars = tempItemData.dozenPrice;
         } 
         else if (
           cartItem.itemData.cat === 'spread'
         ) {
           const tempItemData = itemData as SpreadItem;
-          cartItem.unitPrice = tempItemData.price;
+          cartItem.unitPriceInDollars = tempItemData.price;
         }
       }
     });
@@ -225,7 +224,7 @@ export default class Cart{
         itemData: itemDoc,
         selection: selection || undefined,
         quantity: updatedQuantity,
-        unitPrice: unitPrice,
+        unitPriceInDollars: unitPrice,
       });
     }else if (itemIndex!==null){
       // Item already exists in the user's cart, update the quantity
