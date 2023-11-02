@@ -251,6 +251,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
     jwt.verify(
       pendingOrder.cartToken, process.env.SECRET as jwt.Secret,
       async (err:any, payload:any) => {
+        console.log(payload);
         //an error was found when verifying the bearer token
         if (err) {
           return res.status(403).json({
