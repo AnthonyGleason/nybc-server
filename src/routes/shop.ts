@@ -113,7 +113,9 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
       //issue updating cart token
       const tempCartToken = issueCartJWTToken(cart);
       //store the new cart token
-      let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByCartToken(req.tokens.cart);
+      let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByDocID(paymentIntent.metadata.pendingOrderID.toString());
+      console.log('pending order doc', pendingOrderDoc);
+      console.log('cart token',req.tokens.cart);
       if (!pendingOrderDoc){
         pendingOrderDoc = await createPendingOrderDoc(tempCartToken,req.payload.loginPayload.user._id);
       }else{
@@ -171,7 +173,9 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
   //issue updating cart token
   const tempCartToken = issueCartJWTToken(cart);
   //attempt to get a pending order doc
-  let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByCartToken(req.tokens.cart);
+  let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByDocID(paymentIntent.metadata.pendingOrderID.toString());
+  console.log('pending order doc', pendingOrderDoc);
+  console.log('cart token',req.tokens.cart);
   //store the new cart token
   if (!pendingOrderDoc){
     pendingOrderDoc = await createPendingOrderDoc(tempCartToken,req.payload.loginPayload.user._id);
@@ -453,7 +457,9 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   const tempCartToken = issueCartJWTToken(cart);
 
   //store the new cart token
-  let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByCartToken(req.tokens.cart);
+  let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByDocID(paymentIntent.metadata.pendingOrderID.toString());
+  console.log('pending order doc', pendingOrderDoc);
+  console.log('cart token',req.tokens.cart);
   if (!pendingOrderDoc){
     //a doc does not exist
     pendingOrderDoc = await createPendingOrderDoc(tempCartToken,req.payload.loginPayload.user._id);
@@ -508,14 +514,7 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
   };
 
   //store the token temporarily because it is too long to be sent through stripe
-  //store the new cart token
-  let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByCartToken(req.tokens.cart);
-  if (!pendingOrderDoc){
-    pendingOrderDoc = await createPendingOrderDoc(req.tokens.cart,req.payload.loginPayload.user._id);
-  }else{
-    pendingOrderDoc.cartToken = req.tokens.cart;
-    pendingOrderDoc = await updatePendingOrderDocByDocID(pendingOrderDoc._id as string,pendingOrderDoc);
-  };
+  const pendingOrderDoc:PendingOrder = await createPendingOrderDoc(req.tokens.cart,req.payload.loginPayload.user._id);
 
   try{
     if (!pendingOrderDoc) throw new Error('A pending order doc was not found!');
