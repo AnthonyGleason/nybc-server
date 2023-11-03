@@ -114,8 +114,6 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
       const tempCartToken = issueCartJWTToken(cart);
       //store the new cart token
       let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByDocID(paymentIntent.metadata.pendingOrderID.toString());
-      console.log('pending order doc', pendingOrderDoc);
-      console.log('cart token',req.tokens.cart);
       if (!pendingOrderDoc){
         pendingOrderDoc = await createPendingOrderDoc(tempCartToken,req.payload.loginPayload.user._id);
       }else{
@@ -174,8 +172,6 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
   const tempCartToken = issueCartJWTToken(cart);
   //attempt to get a pending order doc
   let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByDocID(paymentIntent.metadata.pendingOrderID.toString());
-  console.log('pending order doc', pendingOrderDoc);
-  console.log('cart token',req.tokens.cart);
   //store the new cart token
   if (!pendingOrderDoc){
     pendingOrderDoc = await createPendingOrderDoc(tempCartToken,req.payload.loginPayload.user._id);
@@ -255,7 +251,6 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
     jwt.verify(
       pendingOrder.cartToken, process.env.SECRET as jwt.Secret,
       async (err:any, payload:any) => {
-        console.log(payload);
         //an error was found when verifying the bearer token
         if (err) {
           return res.status(403).json({
@@ -458,8 +453,6 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
 
   //store the new cart token
   let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByDocID(paymentIntent.metadata.pendingOrderID.toString());
-  console.log('pending order doc', pendingOrderDoc);
-  console.log('cart token',req.tokens.cart);
   if (!pendingOrderDoc){
     //a doc does not exist
     pendingOrderDoc = await createPendingOrderDoc(tempCartToken,req.payload.loginPayload.user._id);
