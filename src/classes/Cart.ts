@@ -9,6 +9,7 @@ export default class Cart{
   promoCodeID:string;
   discountAmountInDollars:number;
   finalPriceInDollars:number;
+  desiredShipDate:Date;
 
   constructor(
     cartItems?:CartItem[],
@@ -16,7 +17,8 @@ export default class Cart{
     taxInDollars?:number,
     promoCodeID?:string,
     discountAmountInDollars?:number,
-    finalPriceInDollars?:number
+    finalPriceInDollars?:number,
+    desiredShipDate?:Date
   ){
     this.items = cartItems || [];
     this.subtotalInDollars = subtotalInDollars || 0;
@@ -25,6 +27,7 @@ export default class Cart{
     this.promoCodeID = promoCodeID || ''; 
     this.discountAmountInDollars = discountAmountInDollars || 0;
     this.finalPriceInDollars = finalPriceInDollars || 0;
+    this.desiredShipDate = desiredShipDate || new Date();
   };
 
   applyPromoPerk = (perk:string):void=>{

@@ -25,7 +25,8 @@ shopRouter.get('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
     req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
     req.payload.cartPayload.cart.discountAmountInDollars,
-    req.payload.cartPayload.cart.finalPriceInDollars
+    req.payload.cartPayload.cart.finalPriceInDollars,
+    req.payload.cartPayload.cart.desiredShipDate
   );
   if (!cart.promoCodeID){
     res.status(HttpStatusCodes.NOT_FOUND);
@@ -55,7 +56,8 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
     req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
     req.payload.cartPayload.cart.discountAmountInDollars,
-    req.payload.cartPayload.cart.finalPriceInDollars
+    req.payload.cartPayload.cart.finalPriceInDollars,
+    req.payload.cartPayload.cart.desiredShipDate
   );
 
   const promoCodeInput:string = req.body.promoCodeInput;
@@ -142,7 +144,8 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
     req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
     req.payload.cartPayload.cart.discountAmountInDollars,
-    req.payload.cartPayload.cart.finalPriceInDollars
+    req.payload.cartPayload.cart.finalPriceInDollars,
+    req.payload.cartPayload.cart.desiredShipDate
   );
   let paymentID = req.body.clientSecret.split('_secret_')[0]; 
   let paymentIntent:any = {};
@@ -259,12 +262,13 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
           });
         };
         cart = new Cart(
-          payload.cart.items,
-          payload.cart.subtotalInDollars,
-          payload.cart.taxInDollars,
-          payload.cart.promoCodeID,
-          payload.cart.discountAmountInDollars,
-          payload.cart.finalPriceInDollars
+          payload.cartPayload.cart.items,
+          payload.cartPayload.cart.subtotalInDollars,
+          payload.cartPayload.cart.taxInDollars,
+          payload.cartPayload.cart.promoCodeID,
+          payload.cartPayload.cart.discountAmountInDollars,
+          payload.cartPayload.cart.finalPriceInDollars,
+          payload.cartPayload.cart.desiredShipDate
         );
         //we don't have a field for the total quantity calculations so we will calculate it here, we can just put this in the cart constructor
         cart.calcTotalQuantity();
@@ -309,7 +313,8 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
     req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
     req.payload.cartPayload.cart.discountAmountInDollars,
-    req.payload.cartPayload.cart.finalPriceInDollars
+    req.payload.cartPayload.cart.finalPriceInDollars,
+    req.payload.cartPayload.cart.desiredShipDate
   );
 
   if (membershipDoc){
@@ -336,7 +341,8 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
     req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
     req.payload.cartPayload.cart.discountAmountInDollars,
-    req.payload.cartPayload.cart.finalPriceInDollars
+    req.payload.cartPayload.cart.finalPriceInDollars,
+    req.payload.cartPayload.cart.desiredShipDate
   );
   //need to cleanup cart before performing tax calculations
   try{
@@ -496,7 +502,8 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
       req.payload.cartPayload.cart.taxInDollars,
       req.payload.cartPayload.cart.promoCodeID,
       req.payload.cartPayload.cart.discountAmountInDollars,
-      req.payload.cartPayload.cart.finalPriceInDollars || 0
+      req.payload.cartPayload.cart.finalPriceInDollars || 0,
+      req.payload.cartPayload.cart.desiredShipDate
     );
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
     
@@ -560,7 +567,8 @@ shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any
     req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
     req.payload.cartPayload.cart.discountAmountInDollars,
-    req.payload.cartPayload.cart.finalPriceInDollars
+    req.payload.cartPayload.cart.finalPriceInDollars,
+    req.payload.cartPayload.cart.desiredShipDate
   );
 
   //initialize the membership tier as a NonMember
@@ -594,6 +602,28 @@ shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any
   };
 });
 
+//add the users desired ship date to their cart
+shopRouter.put('/carts/shipDate',authenticateCartToken,handleCartLoginAuth,async (req:any,res,next)=>{
+  const desiredShipDate:Date = new Date(req.body.desiredShipDate);
+  
+  //get cart from payload
+  const cart:Cart = new Cart(
+    req.payload.cartPayload.cart.items,
+    req.payload.cartPayload.cart.subtotalInDollars,
+    req.payload.cartPayload.cart.taxInDollars,
+    req.payload.cartPayload.cart.promoCodeID,
+    req.payload.cartPayload.cart.discountAmountInDollars,
+    req.payload.cartPayload.cart.finalPriceInDollars,
+    desiredShipDate
+  );
+
+  //sign the new cart token
+  const newCartToken:string = issueCartJWTToken(cart);
+  
+  //return it to the user
+  res.status(HttpStatusCodes.OK).json({'cartToken': newCartToken});
+});
+
 //update a cart based on the provided bearer token
 shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:any,res,next)=>{
   let userDoc:User | null = null;
@@ -606,7 +636,8 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
     req.payload.cartPayload.cart.taxInDollars,
     req.payload.cartPayload.cart.promoCodeID,
     req.payload.cartPayload.cart.discountAmountInDollars,
-    req.payload.cartPayload.cart.finalPriceInDollars
+    req.payload.cartPayload.cart.finalPriceInDollars,
+    req.payload.cartPayload.cart.desiredShipDate
   );
 
   //destructure the request body

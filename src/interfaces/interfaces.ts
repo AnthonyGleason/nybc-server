@@ -54,6 +54,7 @@ export interface CartInterface{
   promoCodeID: string,
   discountAmountInDollars:number;
   finalPriceInDollars:number;
+  desiredShipDate:Date;
 };
 
 //order
