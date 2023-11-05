@@ -261,14 +261,16 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
             message: 'Forbidden',
           });
         };
+        console.log(payload);
+        //MUST BE SET TO PAYLOAD.CART DO NOT USE REQ THIS IS HANDLED DIFFERENTLY
         cart = new Cart(
-          payload.cartPayload.cart.items,
-          payload.cartPayload.cart.subtotalInDollars,
-          payload.cartPayload.cart.taxInDollars,
-          payload.cartPayload.cart.promoCodeID,
-          payload.cartPayload.cart.discountAmountInDollars,
-          payload.cartPayload.cart.finalPriceInDollars,
-          payload.cartPayload.cart.desiredShipDate
+          payload.cart.items,
+          payload.cart.subtotalInDollars,
+          payload.cart.taxInDollars,
+          payload.cart.promoCodeID,
+          payload.cart.discountAmountInDollars,
+          payload.cart.finalPriceInDollars,
+          payload.cart.desiredShipDate
         );
         //we don't have a field for the total quantity calculations so we will calculate it here, we can just put this in the cart constructor
         cart.calcTotalQuantity();
