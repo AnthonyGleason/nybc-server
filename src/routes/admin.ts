@@ -74,7 +74,7 @@ adminRouter.put('/orders/:userID/:orderID', authenticateLoginToken, authenticate
 });
 
 //get all orders that need to be shipped (basically returns all orders that are pending)
-adminRouter.get('/orders/pulls', authenticateLoginToken, authenticateAdmin, async (req,res,next)=>{
+adminRouter.get('/orders/pending', authenticateLoginToken, authenticateAdmin, async (req,res,next)=>{
   try{
     const orders:Order[] | null = await getAllPendingOrders();
     if (!orders) throw new Error('No orders were found. More orders should come in soon!');
