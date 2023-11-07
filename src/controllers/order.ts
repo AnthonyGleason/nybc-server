@@ -1,5 +1,6 @@
-import { Address, CartInterface, Order } from "@src/interfaces/interfaces";
+import { Address, CartInterface, Order, User } from "@src/interfaces/interfaces";
 import { OrderModel } from "@src/models/Order";
+import { UserModel } from "@src/models/User";
 
 //create a new order
 export const createOrder = async function(
@@ -31,7 +32,27 @@ export const getAllOrdersByUserID = async function(userID:string):Promise<Order[
   return await OrderModel.find({userID: userID});
 };
 
-//return the most recent order
+//search for an order by orderID
+export const searchForOrderByOrderID = async function(orderID:string):Promise<Order[] | null>{
+  const allOrders = await OrderModel.find({}); // Fetch all orders
+  
+  // Filter the orders based on the partialID
+  const matchingOrders = allOrders.filter(order => order._id.toString().includes(orderID));
+
+  return matchingOrders;
+};
+
+//search for a user by userID
+export const searchForUserByUserID = async function(userID:string):Promise<User[] | null>{
+  const allUsers = await UserModel.find({}); // Fetch all orders
+  
+  // Filter the orders based on the partialID
+  const matchingOrders = allUsers.filter(user => user._id.toString().includes(userID));
+
+  return matchingOrders;
+};
+
+//return the most recent order for a user
 export const getMostRecentOrderByUserID = async function(userID: string): Promise<Order | null> {
   return await OrderModel
     .findOne({ userID: userID })
