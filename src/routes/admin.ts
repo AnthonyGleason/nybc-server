@@ -4,7 +4,6 @@ import { getAllOrders, getAllOrdersByUserID, getAllPendingOrders, getOrderByOrde
 import { handleError } from '@src/helpers/error';
 import { Membership, Order, User } from '@src/interfaces/interfaces';
 import { authenticateAdmin, authenticateLoginToken } from '@src/middlewares/auth';
-import { error } from 'console';
 import {Router} from 'express';
 
 //admin menu
@@ -68,7 +67,6 @@ adminRouter.put('/orders/:orderID', authenticateLoginToken, authenticateAdmin, a
     trackingNumber:string,
     giftMessage:string
   } = req.body;
-
   //attempt to get the an order doc from mongodb
   try{
     //initialize the order doc
