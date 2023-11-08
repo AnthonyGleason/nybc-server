@@ -1,6 +1,6 @@
 import HttpStatusCodes from '@src/constants/HttpStatusCodes';
 import { getMembershipByUserID } from '@src/controllers/membership';
-import { getAllOrders, getAllOrdersByUserID, getAllPendingOrders, getOrderByOrderID, searchForOrderByOrderID, searchForUserByUserID, updateOrderByOrderID } from '@src/controllers/order';
+import { getAllOrders, getAllOrdersByUserID, getAllPendingOrders, getAllProcessingOrders, getOrderByOrderID, searchForOrderByOrderID, searchForUserByUserID, updateOrderByOrderID } from '@src/controllers/order';
 import { handleError } from '@src/helpers/error';
 import { Membership, Order, User } from '@src/interfaces/interfaces';
 import { authenticateAdmin, authenticateLoginToken } from '@src/middlewares/auth';
@@ -29,6 +29,16 @@ adminRouter.get('/orders/search/:searchQuery',authenticateLoginToken,authenticat
 adminRouter.get('/orders/pending', authenticateLoginToken, authenticateAdmin, async (req,res,next)=>{
   try{
     const orders:Order[] | null = await getAllPendingOrders();
+    if (!orders) throw new Error('No orders were found. More orders should come in soon!');
+    res.status(HttpStatusCodes.OK).json({orders: orders});
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  };
+});
+
+adminRouter.get('/orders/processing', authenticateLoginToken, authenticateAdmin, async (req,res,next)=>{
+  try{
+    const orders:Order[] | null = await getAllProcessingOrders();
     if (!orders) throw new Error('No orders were found. More orders should come in soon!');
     res.status(HttpStatusCodes.OK).json({orders: orders});
   }catch(err){

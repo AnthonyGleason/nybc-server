@@ -65,6 +65,9 @@ export const getAllPendingOrders = async function():Promise<Order[] | null>{
   return await OrderModel.find({status: 'Pending'});
 };
 
+export const getAllProcessingOrders = async function():Promise<Order[] | null>{
+  return await OrderModel.find({status: 'Processing'});
+};
 export const getAllOrders = async function():Promise<Order[] | null>{
   return await OrderModel.find({});
 };
