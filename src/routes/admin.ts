@@ -1,8 +1,9 @@
 import HttpStatusCodes from '@src/constants/HttpStatusCodes';
 import { getMembershipByUserID } from '@src/controllers/membership';
-import { getAllOrders, getAllOrdersByUserID, getAllPendingOrders, getAllProcessingOrders, getOrderByOrderID, searchForOrderByOrderID, searchForUserByUserID, updateOrderByOrderID } from '@src/controllers/order';
+import { getAllOrders, getAllOrdersByUserID, getAllPendingOrders, getAllProcessingOrders, getOrderByOrderID, getOrderByPromoCodeID, searchForOrderByOrderID, searchForUserByUserID, updateOrderByOrderID } from '@src/controllers/order';
+import { getAllPromoCodes, getPromoCodeByCode, getPromoCodeByID, updatePromoCodeByID } from '@src/controllers/promocode';
 import { handleError } from '@src/helpers/error';
-import { Membership, Order, User } from '@src/interfaces/interfaces';
+import { Membership, Order, PromoCode, User } from '@src/interfaces/interfaces';
 import { authenticateAdmin, authenticateLoginToken } from '@src/middlewares/auth';
 import {Router} from 'express';
 
@@ -13,6 +14,54 @@ adminRouter.get('/verifyAdmin',authenticateLoginToken,authenticateAdmin,async(re
   res.status(200).json({isAdmin: true});
 });
 
+//get promo code sales data
+adminRouter.get('/promoCode/:id/calc',authenticateLoginToken,authenticateAdmin, async (req:any,res,next)=>{
+  const docID: string = req.params.id;
+  let promoTotalSales:number = 0;
+  
+  //get all orders by promo code id
+  const allOrders:Order[] | null= await getOrderByPromoCodeID(docID);
+
+  //calculate total sales
+  if (allOrders){
+    allOrders.map((order:Order)=>{
+      promoTotalSales += order.cart.finalPriceInDollars;
+    });
+  };
+  //return the total sales to the client
+  res.status(HttpStatusCodes.OK).json({promoTotalSales: promoTotalSales.toFixed(2)})
+});
+
+//update a promo code
+adminRouter.put('/promoCode/:id',authenticateLoginToken,authenticateAdmin,async (req:any,res,next)=>{
+  const {
+    totalAllowedUses,
+    isDisabled,
+    description
+  }:{
+    totalAllowedUses:number,
+    isDisabled:boolean,
+    description:string
+  } = req.body;
+  const docID:string = req.params.id;
+  let tempPromoCodeDoc:PromoCode | null = await getPromoCodeByID(docID);
+  if (tempPromoCodeDoc){
+    if (description) tempPromoCodeDoc.description = description;
+    if (isDisabled) tempPromoCodeDoc.disabled = isDisabled;
+    if (totalAllowedUses) tempPromoCodeDoc.totalAllowedUses = totalAllowedUses;
+    await updatePromoCodeByID(docID,tempPromoCodeDoc);
+    res.status(HttpStatusCodes.OK).json({});
+  }else{
+    res.status(HttpStatusCodes.NOT_MODIFIED).json({});
+  };
+});
+// get promo code data for user
+adminRouter.get('/promoCode',authenticateLoginToken,authenticateAdmin, async(req,res,next)=>{
+  const promoCodeData = await getAllPromoCodes();
+  res.status(HttpStatusCodes.OK).json({promoCodeData: promoCodeData});
+})
+
+// calculate total sales for a promo code
 //search for order by name
 adminRouter.get('/orders/search/:searchQuery',authenticateLoginToken,authenticateAdmin, async (req:any,res,next)=>{
   //get the search query from the request params

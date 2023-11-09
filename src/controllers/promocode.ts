@@ -22,6 +22,11 @@ export const createPromoCode = async function(
   })
 };
 
+//get all promo code data
+export const getAllPromoCodes = async function():Promise<PromoCode[] | null>{
+  return await PromoCodeModel.find({});
+};
+
 //get a promo code by id
 export const getPromoCodeByID = async function(codeID:string):Promise<PromoCode | null>{
   return await PromoCodeModel.findById(codeID);
