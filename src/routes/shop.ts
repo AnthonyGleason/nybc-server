@@ -285,18 +285,22 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
         shippingAddress,
         giftMessage
       );
-      if (!orderDoc) throw new Error('An error has occured when updating the order doc.');
+      if (!orderDoc){
+        throw new Error('An error has occured when updating the order doc.');
+      }else{
+        //order was successfully processed in our system
+
+        // Return a 200 response to acknowledge receipt of the event
+        res.status(HttpStatusCodes.OK).send();
+        //remove the cart token items from mongoDB
+        await deletePendingOrderDocByCartToken(pendingOrder.cartToken);
+      };
     }catch(err){
       handleError(res,HttpStatusCodes.NOT_MODIFIED,err);
     };
-
-    //remove the array from mongoDB
-    await deletePendingOrderDocByCartToken(pendingOrder.cartToken);
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
-  // Return a 200 response to acknowledge receipt of the event
-  res.status(HttpStatusCodes.OK).send();
 });
 
 shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCartLoginAuth, async (req:any,res,next)=>{
