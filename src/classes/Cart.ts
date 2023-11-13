@@ -32,6 +32,11 @@ export default class Cart{
 
   applyPromoPerk = (perk:string):void=>{
     switch(perk){
+      case '15_PERCENT_OFF':
+        for (let cartItem of this.items){
+          cartItem.unitPriceInDollars = cartItem.unitPriceInDollars - (cartItem.unitPriceInDollars * 0.15);
+        };
+        break;
       case '25_PERCENT_OFF':
         for (let cartItem of this.items){
           cartItem.unitPriceInDollars = cartItem.unitPriceInDollars - (cartItem.unitPriceInDollars * 0.25);
@@ -44,6 +49,8 @@ export default class Cart{
 
   getPromoCodeDiscountMultiplier = (perk:string):number=>{
     switch(perk){
+      case '15_PERCENT_OFF':
+        return 0.15;
       case '25_PERCENT_OFF':
         return 0.25;
       default:
