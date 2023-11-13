@@ -742,24 +742,27 @@ shopRouter.post('/orders/custom',async(req:any,res,next)=>{
   const {
     emailInput,
     requestInput,
-    quantityInput
+    quantityInput,
+    requestsPackageDeal
   }:{
     emailInput:string,
     requestInput:string,
-    quantityInput:string
+    quantityInput:string,
+    requestsPackageDeal:boolean
   } = req.body;
   //validate inputs
   try{
     if (!emailInput) throw new Error('No email input was recieved.');
     if (!requestInput) throw new Error('No request input was recieved.');
     if (!quantityInput) throw new Error('No quantity input was recieved');
+    if (!requestsPackageDeal) throw new Error('No package deal choice was selected.');
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
 
   //send email to sales team
   const salesEmail:string = 'sales@nybagelsclub.com';
-  await transporter.sendMail(getCustomOrderMailOptions(salesEmail,requestInput,emailInput,quantityInput));
+  await transporter.sendMail(getCustomOrderMailOptions(salesEmail,requestInput,emailInput,quantityInput,requestsPackageDeal));
   
   //respond to client  *** needs an empty response body or the client doesn't properly recieve the response
   res.status(HttpStatusCodes.OK).json({});

@@ -15,13 +15,20 @@ export const getCustomOrderMailOptions = function(
   salesEmail:string,
   request:string,
   userEmail:string,
-  quantityInput:string
+  quantityInput:string,
+  requestsPackageDeal:boolean
 ){
+  let requestsPackageDealStr:string = '';
+  if (requestsPackageDeal){
+    requestsPackageDealStr='want';
+  }else{
+    requestsPackageDealStr="don't want";
+  };
   return({
     from: 'noreply@nybagelsclub.com',
     to: salesEmail,
     subject: 'Personalized Order Request',
-    text: `A user with the email "${userEmail}" has requested a quantity of "${quantityInput}" for a custom order with the following request "${request}"`,
+    text: `A user with the email "${userEmail}" has requested a quantity of "${quantityInput}" for a custom order with the following request "${request}". They ${requestsPackageDealStr} the $275 package offering. `,
   })
 };
 
