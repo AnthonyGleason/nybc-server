@@ -289,11 +289,18 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
         throw new Error('An error has occured when updating the order doc.');
       }else{
         //order was successfully processed in our system
-
-        // Return a 200 response to acknowledge receipt of the event
-        res.status(HttpStatusCodes.OK).send();
+        
+        console.log(paymentIntentSucceeded);
+        //update stripe payment intent by the payment intent's id
+        await stripe.paymentIntents.update(paymentIntentSucceeded.id,{
+          metadata:{
+            orderID: orderDoc._id
+          }
+        });
         //remove the cart token items from mongoDB
         await deletePendingOrderDocByCartToken(pendingOrder.cartToken);
+        // Return a 200 response to acknowledge receipt of the event
+        res.status(HttpStatusCodes.OK).send();
       };
     }catch(err){
       handleError(res,HttpStatusCodes.NOT_MODIFIED,err);

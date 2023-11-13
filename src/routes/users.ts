@@ -10,7 +10,8 @@ import { transporter } from "@src/server";
 import { salt } from "@src/constants/auth";
 import { handleError } from "@src/helpers/error";
 import { getNewRegistrationMailOptions, getPasswordResetMailOptions } from "@src/constants/emails";
-import { getMostRecentOrderByUserID } from "@src/controllers/order";
+import { getMostRecentOrderByUserID, getOrderByOrderID } from "@src/controllers/order";
+import { stripe } from "@src/util/stripe";
 
 const usersRouter = Router();
 
@@ -354,13 +355,21 @@ usersRouter.put('/settings', authenticateLoginToken, async (req:any,res,next)=>{
 });
 
 
-usersRouter.get('/orders/mostRecent',authenticateLoginToken, async (req:any,res,next)=>{
-  const mostRecentOrder:Order | null = await getMostRecentOrderByUserID(req.payload.loginPayload.user._id);
-  if (mostRecentOrder){
-    res.status(HttpStatusCodes.OK).json({orderData: mostRecentOrder});
+usersRouter.get('/orders/getByIntent/:paymentIntentID',authenticateLoginToken, async (req:any,res,next)=>{
+  //get payment intent from params
+  const paymentIntentID:string | null = req.params.paymentIntentID;
+  //fetch payment intent data from stripe
+  const paymentIntent:any = await stripe.paymentIntents.retrieve(paymentIntentID);
+  //obtain order data from our server
+  let orderData:Order | null = null;
+  if (paymentIntent) orderData = await getOrderByOrderID(paymentIntent.metadata.orderID);
+  console.log('payment intent',paymentIntentID);
+  console.log('order data', orderData);
+  if (orderData){
+    res.status(HttpStatusCodes.OK).json({orderData: orderData});
   }else{
     res.status(HttpStatusCodes.NOT_FOUND);
-  }
+  };
 });
 
 export default usersRouter;
