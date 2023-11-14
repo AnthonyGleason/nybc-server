@@ -355,7 +355,7 @@ usersRouter.put('/settings', authenticateLoginToken, async (req:any,res,next)=>{
 });
 
 
-usersRouter.get('/orders/getByIntent',authenticateLoginToken, async (req:any,res,next)=>{
+usersRouter.post('/orders/getByIntent',authenticateLoginToken, async (req:any,res,next)=>{
   //get payment intent from params
   const paymentIntentID:string | null = req.body.paymentIntentID;
   //fetch payment intent data from stripe
