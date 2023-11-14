@@ -355,13 +355,14 @@ usersRouter.put('/settings', authenticateLoginToken, async (req:any,res,next)=>{
 });
 
 
-usersRouter.get('/orders/getByIntent/:paymentIntentID',authenticateLoginToken, async (req:any,res,next)=>{
+usersRouter.get('/orders/getByIntent',authenticateLoginToken, async (req:any,res,next)=>{
   //get payment intent from params
-  const paymentIntentID:string | null = req.params.paymentIntentID.split('_secret_')[0];
+  const paymentIntentID:string | null = req.body.paymentIntentID;
   //fetch payment intent data from stripe
   const paymentIntent:any = await stripe.paymentIntents.retrieve(paymentIntentID);
   //obtain order data from our server
   let orderData:Order | null = null;
+  console.log('metadata orderID', paymentIntent.metadata.orderID);
   if (paymentIntent) orderData = await getOrderByOrderID(paymentIntent.metadata.orderID);
   console.log('payment intent',paymentIntentID);
   console.log('order data', orderData);

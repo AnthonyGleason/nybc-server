@@ -285,12 +285,14 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
         shippingAddress,
         giftMessage
       );
+      console.log('orderDoc', orderDoc);
       if (!orderDoc){
         throw new Error('An error has occured when updating the order doc.');
       }else{
         //order was successfully processed in our system
-        
-        console.log(paymentIntentSucceeded);
+        console.log('test');
+        console.log(paymentIntentSucceeded.id);
+        console.log(orderDoc._id);
         //update stripe payment intent by the payment intent's id
         await stripe.paymentIntents.update(paymentIntentSucceeded.id,{
           metadata:{
