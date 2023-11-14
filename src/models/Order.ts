@@ -25,7 +25,8 @@ const OrderSchema = new mongoose.Schema({
     required: true,
   },
   trackingNumber:{
-    type: String
+    type: [String],
+    default: []
   },
   giftMessage:{
     type: String,
