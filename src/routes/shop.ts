@@ -296,7 +296,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
         //update stripe payment intent by the payment intent's id
         await stripe.paymentIntents.update(paymentIntentSucceeded.id,{
           metadata:{
-            orderID: orderDoc._id
+            orderID: orderDoc._id.toString()
           }
         });
         //remove the cart token items from mongoDB
