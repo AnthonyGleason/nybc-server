@@ -24,7 +24,7 @@ const OrderSchema = new mongoose.Schema({
     type: Object,
     required: true,
   },
-  trackingNumber:{
+  trackingNumberArr:{
     type: [String],
     default: []
   },
