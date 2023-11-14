@@ -139,13 +139,12 @@ adminRouter.put('/orders/:orderID', authenticateLoginToken, authenticateAdmin, a
     updatedOrderDoc.status = status;
     updatedOrderDoc.trackingNumberArr = trackingNumberArr;
     updatedOrderDoc.giftMessage = giftMessage;
-
     //push updated doc to mongodb
     try{
       const tempOrderDoc: Order | null = await updateOrderByOrderID(updatedOrderDoc,orderDoc._id as string);
       //order doc must have been successfully updated
       if (!tempOrderDoc) throw new Error('An error occured when updating the order please try again later.');
-      res.status(HttpStatusCodes.OK).json({updatedOrder: tempOrderDoc});
+      res.status(HttpStatusCodes.OK).json({updatedOrder: updatedOrderDoc});
     }catch(err){
       handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
     };
