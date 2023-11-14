@@ -64,7 +64,7 @@ export interface Order{
   status:string,
   cart:CartInterface,
   shippingAddress:Address,
-  trackingNumber?:string,
+  trackingNumberArr?:string[],
   giftMessage?:string
   _id: string | mongoose.Types.ObjectId // unique id given by mongodb
 };

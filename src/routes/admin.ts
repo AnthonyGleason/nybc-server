@@ -119,11 +119,11 @@ adminRouter.put('/orders/:orderID', authenticateLoginToken, authenticateAdmin, a
   //destructure the req body
   const {
     status,
-    trackingNumber,
+    trackingNumberArr,
     giftMessage
   }:{
     status:string,
-    trackingNumber:string,
+    trackingNumberArr:string[],
     giftMessage:string
   } = req.body;
   //attempt to get the an order doc from mongodb
@@ -137,7 +137,7 @@ adminRouter.put('/orders/:orderID', authenticateLoginToken, authenticateAdmin, a
     let updatedOrderDoc:Order = orderDoc;
     //update the order doc locally
     updatedOrderDoc.status = status;
-    updatedOrderDoc.trackingNumber = trackingNumber;
+    updatedOrderDoc.trackingNumberArr = trackingNumberArr;
     updatedOrderDoc.giftMessage = giftMessage;
 
     //push updated doc to mongodb
