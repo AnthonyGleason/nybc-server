@@ -6,8 +6,15 @@ export const getNewRegistrationMailOptions = function(email:string){
   return({
     from: 'noreply@nybagelsclub.com',
     to: email,
-    subject: 'Dear Valued Customer',
-    text: `Welcome to the New York Bagels Club Family. We're truly grateful for your interest in our products, and we can't wait to share our delicious menu with you.`,
+    subject: 'Account Registration Confirmation',
+    html: 
+    `
+      <p font-size: 16px;">Welcome to the New York Bagels Club Family!</p>
+      <p font-size: 16px;">This email is confirmation that we have successfully created your account.</p>
+      <p font-size: 16px;">We're truly grateful for your interest in our products, and we can't wait to share our delicious hand-curated menu with you.</p>
+      <p font-size: 16px;">Sincerly,</p>
+      <p font-size: 16px;">New York Bagels Club
+    `,
   })
 };
 

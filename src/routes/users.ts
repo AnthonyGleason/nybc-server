@@ -25,7 +25,15 @@ usersRouter.post('/register', async(req,res,next)=>{
     password,
     passwordConfirm
   } = req.body;
+  
   let hashedPassword:string = '';
+  
+  try{
+    //generate the hashed password
+    hashedPassword = await bcrypt.hash(password,salt);
+  }catch(err){
+    handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
+  };
 
   //verify required fields are provided
   try{
@@ -42,12 +50,7 @@ usersRouter.post('/register', async(req,res,next)=>{
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   }
 
-  try{
-    //generate the hashed password
-    hashedPassword = await bcrypt.hash(password,salt);
-  }catch(err){
-    handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
-  };
+ 
 
   try{
     //verify the email is not taken by another user
@@ -246,13 +249,15 @@ usersRouter.get('/settings', authenticateLoginToken, async (req:any,res,next)=>{
     const userDoc:User | null = await getUserByID(req.payload.loginPayload.user._id);
 
     //handle user doc was not found
-    if (!userDoc) throw new Error('A user doc was not found.');
-
-    res.status(HttpStatusCodes.OK).json({
-      firstName: userDoc.firstName,
-      lastName: userDoc.lastName,
-      email: userDoc.email,
-    });
+    if (!userDoc){
+      throw new Error('A user doc was not found.');
+    }else{
+      res.status(HttpStatusCodes.OK).json({
+        firstName: userDoc.firstName,
+        lastName: userDoc.lastName,
+        email: userDoc.email,
+      });
+    }
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
