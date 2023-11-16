@@ -39,12 +39,12 @@ export const getOrderPlacedMailOptions = function(
   return({
     from: 'noreply@nybagelsclub.com',
     to: userEmail,
-    subject: `Order Placed Successfully #${order._id}`,
+    subject: `Thank you for your New York Bagels Club order`,
     html: 
       `
-      <p style='font-size: 16px>Thank you for choosing New York Bagels Club!</p>
-      <br></br>
       <li class='order-item' style='font-size: 16px;'>
+      <p style='font-size: 16px>Thank you for choosing New York Bagels Club! Your Order Number is ${order._id}</p>
+      <br></br>
       <button class='order-item-expand-toggle' style='font-size: 16px;'>
         <span class='order-date' style='font-size: 16px;'>Order Date: ${order.dateCreated.toDateString()}</span>
         <span class='order-id' style='font-size: 16px;'>Order Number: #${order._id}</span>
@@ -73,7 +73,6 @@ export const getOrderPlacedMailOptions = function(
           </ul>
         </div>
         <div class='order-costs' style='font-size: 16px;'>
-          <h4 style='font-size: 16px;'>Order Costs:</h4>
           <p style='font-size: 16px;'>
             <span style='font-size: 16px;'>Basket Subtotal:</span>
             <span style='font-size: 16px;'><strong>$${order.cart.subtotalInDollars.toFixed(2)}</strong></span>
@@ -103,17 +102,11 @@ export const getOrderPlacedMailOptions = function(
             <p style='font-size: 16px;'>${order.giftMessage}</p>
           </div>
         ` : ''}
-        <div style='font-size: 16px;'>
-          <h4 style='font-size: 16px;'>Order Status</h4>
-          <p style='font-size: 16px;'>${order.status}</p>
-        </div>
         ${order.trackingNumberArr && (order.trackingNumberArr.length > 0) ? 
           order.trackingNumberArr.map((trackingNumber, index) => `
             <OrderTrackingItem index=${index} key=${index} trackingNumber=${trackingNumber} order=${order} />
           `).join('') : `
             <div key="noTracking" style='font-size: 16px;'>
-              <h4 style='font-size: 16px;'>Track Your Order</h4>
-              <p style='font-size: 16px;'>Check Back Soon!</p>
               <p style='font-size: 16px;'>Your selected ship date is <strong>${new Date(order.cart.desiredShipDate).toDateString()}</strong>.</p>
             </div>
           `}
