@@ -13,7 +13,7 @@ import jwt from 'jsonwebtoken';
 import { handleError } from '@src/helpers/error';
 import { getPromoCodeByCode, getPromoCodeByID, updatePromoCodeByID } from '@src/controllers/promocode';
 import { createPendingOrderDoc, deletePendingOrderDocByCartToken, getPendingOrderDocByCartToken, getPendingOrderDocByDocID, updatePendingOrderDocByDocID } from '@src/controllers/pendingOrder';
-import { getCustomOrderMailOptions } from '@src/constants/emails';
+import { getCustomOrderMailOptions, getOrderPlacedMailOptions } from '@src/constants/emails';
 import { transporter } from "@src/server";
 
 export const shopRouter = Router();
@@ -298,6 +298,12 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
         });
         //remove the cart token items from mongoDB
         await deletePendingOrderDocByCartToken(pendingOrder.cartToken);
+
+        //retrieve user info so we can get their email
+        const userDoc:User | null = await getUserByID(orderDoc._id.toString());
+        if (!userDoc) throw new Error('No user doc found!');
+        //email user that order was successfully placed
+        await transporter.sendMail(getOrderPlacedMailOptions(userDoc.email,orderDoc));
         // Return a 200 response to acknowledge receipt of the event
         res.status(HttpStatusCodes.OK).send();
       };

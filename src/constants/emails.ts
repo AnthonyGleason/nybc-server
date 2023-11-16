@@ -42,6 +42,8 @@ export const getOrderPlacedMailOptions = function(
     subject: `Order Placed Successfully #${order._id}`,
     html: 
       `
+      <p style='font-size: 16px>Thank you for choosing New York Bagels Club!</p>
+      <br />
       <li class='order-item' style='font-size: 16px;'>
       <button class='order-item-expand-toggle' style='font-size: 16px;'>
         <span class='order-date' style='font-size: 16px;'>Order Date: ${order.dateCreated.toDateString()}</span>
