@@ -105,7 +105,7 @@ export const getOrderPlacedMailOptions = function(
         ` : ''}
         <div style='font-size: 16px;'>
           <h4 style='font-size: 16px;'>Order Status</h4>
-          <p style='font-size: 16px;'>${status}</p>
+          <p style='font-size: 16px;'>${order.status}</p>
         </div>
         ${order.trackingNumberArr && (order.trackingNumberArr.length > 0) ? 
           order.trackingNumberArr.map((trackingNumber, index) => `
