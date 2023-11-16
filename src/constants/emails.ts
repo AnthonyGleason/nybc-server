@@ -45,10 +45,10 @@ export const getOrderPlacedMailOptions = function(
       <li class='order-item' style='font-size: 16px;'>
       <p style='font-size: 16px>Thank you for choosing New York Bagels Club! Your Order Number is ${order._id}</p>
       <br></br>
-      <button class='order-item-expand-toggle' style='font-size: 16px;'>
+      <p class='order-item-expand-toggle' style='font-size: 16px;'>
         <span class='order-date' style='font-size: 16px;'>Order Date: ${order.dateCreated.toDateString()}</span>
         <span class='order-id' style='font-size: 16px;'>Order Number: #${order._id}</span>
-      </button>
+      </p>
       <div class='order-info-wrapper' style='font-size: 16px;'>
         <div style='font-size: 16px;'>
           <h4 style='font-size: 16px;'>Shipping Address</h4>
