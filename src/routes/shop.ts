@@ -300,7 +300,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
         await deletePendingOrderDocByCartToken(pendingOrder.cartToken);
 
         //retrieve user info so we can get their email
-        const userDoc:User | null = await getUserByID(orderDoc._id.toString());
+        const userDoc:User | null = await getUserByID(orderDoc.userID);
         if (!userDoc) throw new Error('No user doc found!');
         //email user that order was successfully placed
         await transporter.sendMail(getOrderPlacedMailOptions(userDoc.email,orderDoc));
