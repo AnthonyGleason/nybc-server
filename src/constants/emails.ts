@@ -43,7 +43,7 @@ export const getOrderPlacedMailOptions = function(
     html: 
       `
       <p style='font-size: 16px>Thank you for choosing New York Bagels Club!</p>
-      <br />
+      <br></br>
       <li class='order-item' style='font-size: 16px;'>
       <button class='order-item-expand-toggle' style='font-size: 16px;'>
         <span class='order-date' style='font-size: 16px;'>Order Date: ${order.dateCreated.toDateString()}</span>
@@ -146,7 +146,7 @@ export const getCustomOrderMailOptions = function(
         <p style="font-size: 16px;">They are requesting a quantity of, "${quantityInput}"</p>
         <p style="font-size: 16px;">They left this request for us, "${request}".</p>
         <p style="font-size: 16px;">They ${requestsPackageDealStr} the $275 package offering.</p> 
-        <br />
+        <br></br>
         <p font-size: 20px;">Please respond to this inquiry within 24 hours.</p>
       `,
   })
