@@ -4,7 +4,7 @@ import { Router } from "express";
 import bcrypt from 'bcrypt';
 import HttpStatusCodes from "@src/constants/HttpStatusCodes";
 import { invalidatedTokens, issueUserJWTToken, passwordResetTokens } from "@src/helpers/auth";
-import { createMembership, getMembershipByUserID } from "@src/controllers/membership";
+import { createMembership, deleteMembershipByUserID, getMembershipByUserID } from "@src/controllers/membership";
 import { authenticateLoginToken } from "@src/middlewares/auth";
 import { transporter } from "@src/server";
 import { salt } from "@src/constants/auth";
@@ -14,6 +14,21 @@ import { getMostRecentOrderByUserID, getOrderByOrderID } from "@src/controllers/
 import { stripe } from "@src/util/stripe";
 
 const usersRouter = Router();
+
+//get user data
+usersRouter.get('/',authenticateLoginToken, async (req:any,res,next)=>{
+  try{
+    const userDoc:User | null = await getUserByEmail(req.payload.loginPayload.user.email);
+    if (!userDoc) throw new Error('A userDoc was not found for the provided login token');
+    const membershipDoc:Membership | null = await getMembershipByUserID(userDoc._id.toString());
+    res.status(HttpStatusCodes.OK).json({
+      user:userDoc,
+      membership:membershipDoc
+    });
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  }
+});
 
 //register a new user
 usersRouter.post('/register', async(req,res,next)=>{
@@ -25,62 +40,50 @@ usersRouter.post('/register', async(req,res,next)=>{
     password,
     passwordConfirm
   } = req.body;
-  
-  let hashedPassword:string = '';
-  
-  try{
-    //generate the hashed password
-    hashedPassword = await bcrypt.hash(password,salt);
-  }catch(err){
-    handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
-  };
 
   //verify required fields are provided
   try{
-    if (!firstName || !lastName || !email || !hashedPassword) throw new Error('All required fields must be completed.');
+    if (!firstName || !lastName || !email || !password || !passwordConfirm) throw new Error('All required fields must be completed.');
+    if (password!==passwordConfirm) throw new Error('Passwords do not match.');
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
 
-  
-  try{
-    //verify provided passwords match
-    if (password!==passwordConfirm) throw new Error('Passwords do not match.');
-  }catch(err){
-    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
-  }
-
- 
-
-  try{
-    //verify the email is not taken by another user
-    if (await getUserByEmail(email)) throw new Error('An account with that email already exists.');
-  }catch(err){
-    handleError(res,HttpStatusCodes.CONFLICT,err);
+  let hashedPassword:string = '';
+  try {
+    // Verify the email is not taken by another user and generate the hashed password
+    const [existingUser, tempHashedPassword]:any= await Promise.all([
+      getUserByEmail(email),
+      bcrypt.hash(password, salt)
+    ])
+    hashedPassword=tempHashedPassword;
+    if (existingUser) throw new Error('An account with that email already exists.');
+  } catch (err) {
+    handleError(res, HttpStatusCodes.CONFLICT, err);
   };
 
   //attempt to create a new user
   try{
-    //create the user document
-    const UserDoc:User = await createNewUser(
-      firstName,
-      lastName,
-      email,
-      hashedPassword,
-      new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
-      false,
-    );
-
+    const [UserDoc,emailResponse]:any = await Promise.all([
+      createNewUser(
+        firstName,
+        lastName,
+        email,
+        hashedPassword,
+        new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
+        false,
+      ),
+      transporter.sendMail(getNewRegistrationMailOptions(email))
+    ])
     //create a membership document for the new user
-    await createMembership(UserDoc._id.toString());
-
+    createMembership(UserDoc._id.toString());
     //sign a jwt token for the user so they dont have to sign in again
     const token:string = issueUserJWTToken(UserDoc);
 
-    //send the new user welcome email
-    await transporter.sendMail(getNewRegistrationMailOptions(email));
-
-    res.status(HttpStatusCodes.OK).json({token: token});
+    res.status(HttpStatusCodes.OK).json({
+      token: token,
+      isEmailSent: emailResponse.accepted.length===1
+    });
   }catch(err){
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
@@ -92,6 +95,14 @@ usersRouter.post('/login', async (req,res,next)=>{
     email,
     password
   } = req.body;
+
+  try{
+    if (!email) throw new Error('An email input was not provided.');
+    if (!password) throw new Error('A password input was not provided.');
+  }catch(err){
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
+  };
+
   //attempt to fetch user doc from mongodb
   try{
     //get the user from mongoDB by email
@@ -119,7 +130,12 @@ usersRouter.post('/logout', authenticateLoginToken, (req:any,res,next)=>{
   try{
     if (!req.tokens) throw new Error('The request is missing a token to logout. You may already be signed out.');
     invalidatedTokens.push(req.tokens.loginToken);
-    res.status(HttpStatusCodes.OK).json({message: 'You have been succesfully logged out.'})
+    const isLoggedOut:boolean = invalidatedTokens.includes(req.tokens.loginToken)
+    
+    res.status(HttpStatusCodes.OK).json({
+      message: 'You have been succesfully logged out.',
+      isLoggedOut: isLoggedOut
+    })
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
@@ -144,15 +160,32 @@ usersRouter.get('/membershipLevel', authenticateLoginToken, async (req:any,res,n
   };
 });
 
+usersRouter.delete('/membershipLevel',authenticateLoginToken, async(req:any,res,next)=>{
+  const userID:string = req.payload.loginPayload.user._id;
+  await deleteMembershipByUserID(userID.toString());
+  res.status(HttpStatusCodes.OK).json({});
+});
+
 //send forgot password email
 usersRouter.post('/forgotPassword', async(req:any,res,next)=>{
   try{
     const userEmail:string | undefined = req.body.email;
     //an email was not provided by the user
     if (!userEmail) throw new Error('A user email was not provided.');
-
+    try{
+      const userDoc:User | null = await getUserByEmail(userEmail);
+      if (!userDoc) throw new Error('A user was not found with the provided email.');
+    }catch(err){
+      handleError(res,HttpStatusCodes.NOT_FOUND,err);
+    };
     //send password reset email
-    await transporter.sendMail(getPasswordResetMailOptions(userEmail));
+    const emailResponse = await transporter.sendMail(getPasswordResetMailOptions(userEmail));
+    let isEmailSent:boolean = false;
+    
+    //check if email was sent
+    if (emailResponse.accepted.length===1) {
+      isEmailSent=true;
+    }; 
     res.status(HttpStatusCodes.OK).json({isEmailSent: true});
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);

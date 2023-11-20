@@ -23,7 +23,7 @@ export const authenticateLoginToken = function(req:any, res:any, next:any) {
   const authToken = authHeader && authHeader.split(' ')[1]; //get the token which is at index 1 (index 0 would just say Bearer)
   //handle token does not exist or token is revoked
   if (!authToken || invalidatedTokens.includes(authToken)) {
-    return res.status(401).json({ 
+    return res.status(HttpStatusCodes.UNAUTHORIZED).json({ 
       isValid: false,
       message: 'Unauthorized',
     });
@@ -34,9 +34,9 @@ export const authenticateLoginToken = function(req:any, res:any, next:any) {
     (err:any, payload:any) => {
       //an error was found when verifying the bearer token
       if (err) {
-        return res.status(403).json({
+        return res.status(HttpStatusCodes.UNAUTHORIZED).json({
           isValid: false,
-          message: 'Forbidden',
+          message: 'Unauthorized',
         });
       };
       //assign the payload and token to the request for future use in next middleware/route functions

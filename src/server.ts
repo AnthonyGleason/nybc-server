@@ -23,10 +23,11 @@ import { RouteError } from '@src/other/classes';
 import apiRouter from '@src/routes/api';
 import cors from 'cors';
 import nodemailer from 'nodemailer';
+import { isTestingModeEnabled } from './config/config';
 
 // **** Variables **** //
 
-const app = express();
+export const app = express();
 
 
 // **** Setup **** //
@@ -73,9 +74,16 @@ export const transporter = nodemailer.createTransport({
 
 //setup mongoose, connecting to the database url in .env
 const mongoose = require('mongoose');
-mongoose.connect(process.env.DATABASE_URL).then(()=>{
-  console.log('Successfully connected to the mongodb database.')
-});
+// Check if testing mode is enabled
+if (!isTestingModeEnabled) {
+  // Connection is not open, so connect to the production database
+  mongoose.connect(process.env.DATABASE_URL).then(() => {
+    console.log('Successfully connected to the MongoDB production database.');
+  });
+} else {
+  // Connection is already open (connected to testing database)
+  console.log("Error: Can't connect to production because testing mode flag is enabled!");
+};
 
 // Add APIs, must be after middleware
 app.use('/api',apiRouter);
