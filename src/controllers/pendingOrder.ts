@@ -22,7 +22,7 @@ export const getPendingOrderDocByDocID= async function(docID:string):Promise<Pen
 };
 
 export const updatePendingOrderDocByDocID = async function(docID:string, updatedPendingOrderDoc:PendingOrder):Promise<PendingOrder | null>{
-  return await PendingOrderModel.findByIdAndUpdate(docID,updatedPendingOrderDoc);
+  return await PendingOrderModel.findByIdAndUpdate(docID,updatedPendingOrderDoc, { new: true });
 };
 
 //delete a pending order doc by cart token

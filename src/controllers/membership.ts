@@ -23,12 +23,12 @@ export const getMembershipByUserID = async function(userID:string):Promise<Membe
 
 //update a membership by membershipID
 export const updateMembershipByMembershipID = async function(membershipID:string,updatedMembership:Membership){
-  return await MembershipModel.findByIdAndUpdate(membershipID,updatedMembership);
+  return await MembershipModel.findByIdAndUpdate(membershipID,updatedMembership, { new: true });
 };
 
 //update a membership by userID
 export const updateMembershipByUserID = async function(userID:string,updatedMembership:Membership){
-  return await MembershipModel.findOneAndUpdate({userID:userID},updatedMembership);
+  return await MembershipModel.findOneAndUpdate({userID:userID},updatedMembership, { new: true });
 };
 
 //delete a membership by membershipID

@@ -3,7 +3,7 @@ import {Membership, Order, PasswordReset, User} from "@src/interfaces/interfaces
 import { Router } from "express";
 import bcrypt from 'bcrypt';
 import HttpStatusCodes from "@src/constants/HttpStatusCodes";
-import { invalidatedTokens, issueUserJWTToken, passwordResetTokens } from "@src/helpers/auth";
+import { invalidatedTokens, issueCartJWTToken, issueUserJWTToken, passwordResetTokens } from "@src/helpers/auth";
 import { createMembership, deleteMembershipByUserID, getMembershipByUserID } from "@src/controllers/membership";
 import { authenticateLoginToken } from "@src/middlewares/auth";
 import { transporter } from "@src/server";
@@ -76,7 +76,7 @@ usersRouter.post('/register', async(req,res,next)=>{
       transporter.sendMail(getNewRegistrationMailOptions(email))
     ])
     //create a membership document for the new user
-    createMembership(UserDoc._id.toString());
+    await createMembership(UserDoc._id.toString());
     //sign a jwt token for the user so they dont have to sign in again
     const token:string = issueUserJWTToken(UserDoc);
 
@@ -180,13 +180,8 @@ usersRouter.post('/forgotPassword', async(req:any,res,next)=>{
     };
     //send password reset email
     const emailResponse = await transporter.sendMail(getPasswordResetMailOptions(userEmail));
-    let isEmailSent:boolean = false;
-    
-    //check if email was sent
-    if (emailResponse.accepted.length===1) {
-      isEmailSent=true;
-    }; 
-    res.status(HttpStatusCodes.OK).json({isEmailSent: true});
+ 
+    res.status(HttpStatusCodes.OK).json({isEmailSent: emailResponse.accepted.length===1});
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
@@ -298,7 +293,6 @@ usersRouter.get('/settings', authenticateLoginToken, async (req:any,res,next)=>{
 
 //update account settings
 usersRouter.put('/settings', authenticateLoginToken, async (req:any,res,next)=>{
-  //destructure request body
   const {
     firstNameInput,
     lastNameInput,
@@ -314,84 +308,49 @@ usersRouter.put('/settings', authenticateLoginToken, async (req:any,res,next)=>{
     passwordConfInput:string,
     currentPasswordInput:string
   } = req.body;
-
-  let passwordMatch:boolean = false;
-  let userDoc:User | null = null;
-
   try{
-    //verify all required fields were provided
-    if (
-      !currentPasswordInput 
-    ) throw new Error('The current password input was left blank. It is required to make any changes to the current account.');
-
-    //a password update was initiated but the required fields were not provided
-    if (
+    if(
+      !firstNameInput ||
+      !lastNameInput ||
+      !emailInput ||
       !passwordInput ||
-      !passwordConfInput
-    ) throw new Error('A password update was requested but the required fields to update the user password were not provided.');
+      !passwordConfInput ||
+      !currentPasswordInput
+    ) throw new Error('One or more input fields were not provided.');
+    if (passwordInput!==passwordConfInput) throw new Error('Provided passwords do not match.');
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
-
+  
   try{
-    //get the user doc
-    userDoc = await getUserByID(req.payload.loginPayload.user._id);
-    if (!userDoc) throw new Error('A user was not found for the login token.');
-
-    //ensure password matches the user doc hashed password
-    try{
-      passwordMatch = await bcrypt.compare(currentPasswordInput,userDoc.hashedPassword);
-      if (!passwordMatch) throw new Error('The provided password is incorrect.');
-    }catch(err){
-      handleError(res,HttpStatusCodes.UNAUTHORIZED,err);
+    let [userDoc, tempUserDoc,hashedPassword] = await Promise.all([
+      getUserByID(req.payload.loginPayload.user._id),
+      getUserByEmail(emailInput),
+      await bcrypt.hash(passwordInput,salt)
+    ]);
+    
+    if (tempUserDoc && req.payload.loginPayload.user.email !== tempUserDoc.email) {
+      throw new Error('An account already exists with that email.');
     };
-
-    try{
-      //if the email is already in use do not proceed
-      if (await getUserByEmail(emailInput)) throw new Error('An account already exists with that email.');
-    }catch(err){
-      handleError(res,HttpStatusCodes.CONFLICT,err);
-    };
-
-    try{
-      //if the password was changed
-      if (passwordInput !== passwordConfInput) throw new Error('Password inputs do not match.');
-      //hash the new password and update the updated user doc with it
-      const hashedPassword:string = await bcrypt.hash(passwordInput,salt);
-      userDoc.hashedPassword=hashedPassword;
-    }catch(err){
-      handleError(res,HttpStatusCodes.BAD_REQUEST,err);
-    };
-
-    //determine which fields were updated and apply those changes to a temp user object
-    userDoc.firstName = firstNameInput;
-    userDoc.lastName = lastNameInput;
-    userDoc.email = emailInput;
-
-    try{
-      //invalidate the current user login token
-      invalidatedTokens.push(req.tokens.loginToken);
-      
-      // sign a jwt token for the user so they dont have to sign in again
-      const token:string = issueUserJWTToken(userDoc);
-
-      //update the document in mongoDB
-      const updatedUser:User | null = await updateUserByUserID(userDoc._id as string,userDoc);
-      if (!updatedUser) throw new Error('An error has occured when updating the user settings, no changes to your account were made.');
-
-      //respond with wasUserUpdated to client
+    
+    if (userDoc){
+      userDoc.firstName=firstNameInput;
+      userDoc.lastName=lastNameInput;
+      userDoc.email = emailInput;
+      userDoc.hashedPassword = hashedPassword
+      const updatedUser:User | null = await updateUserByUserID(userDoc._id.toString(),userDoc);
+      invalidatedTokens.push(req.tokens.login);
+      const token:string = issueCartJWTToken(updatedUser);
       res.status(HttpStatusCodes.OK).json({
+        user: updatedUser,
         wasUserUpdated: true,
         loginToken: token
       });
-    }catch(err){
-      handleError(res,HttpStatusCodes.NOT_MODIFIED,err);
     };
   }catch(err){
-    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+    handleError(res,HttpStatusCodes.CONFLICT,err);
   };
 });
-
 
 usersRouter.post('/orders/getByIntent',authenticateLoginToken, async (req:any,res,next)=>{
   //get payment intent from params

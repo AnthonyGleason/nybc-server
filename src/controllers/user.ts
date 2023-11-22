@@ -44,9 +44,9 @@ export const createNewUser = async function(
 export const getAllUsers = async function():Promise<User[] | null>{
   return await UserModel.find({});
 }
-//update a user by userID
-export const updateUserByUserID = async function(userID:string,updatedUser:User):Promise<User | null>{
-  return await UserModel.findByIdAndUpdate(userID,updatedUser);
+// update a user by userID
+export const updateUserByUserID = async function(userID: string, updatedUser: User): Promise<User | null> {
+  return await UserModel.findByIdAndUpdate(userID, updatedUser, { new: true });
 };
 
 //delete a user by userID

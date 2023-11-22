@@ -59,10 +59,10 @@ export const deleteItemByName = async function(itemName:string):Promise<BagelIte
 
 //update a shop item by ID
 export const updateItemByID = async function(updatedItem:BagelItem | SpreadItem,itemID:string):Promise<BagelItem | SpreadItem | null | null>{
-  return await ItemModel.findByIdAndUpdate(itemID,updatedItem);
+  return await ItemModel.findByIdAndUpdate(itemID,updatedItem, { new: true });
 };
 
 //update a shop item by name
 export const updateItemByName = async function(updatedItem:BagelItem | SpreadItem,itemName:string):Promise<BagelItem | SpreadItem | null | null>{
-  return await ItemModel.findOneAndUpdate({name: itemName},updatedItem)
+  return await ItemModel.findOneAndUpdate({name: itemName},updatedItem, { new: true })
 }

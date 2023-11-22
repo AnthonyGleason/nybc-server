@@ -39,7 +39,7 @@ export const getPromoCodeByCode = async function(code:string):Promise<PromoCode 
 
 //update a promo code by id
 export const updatePromoCodeByID = async function(codeID:string,updatedPromoCode:PromoCode):Promise<PromoCode | null>{
-  return await PromoCodeModel.findByIdAndUpdate(codeID,updatedPromoCode);
+  return await PromoCodeModel.findByIdAndUpdate(codeID,updatedPromoCode, { new: true });
 };
 
 //delete a promo code by id

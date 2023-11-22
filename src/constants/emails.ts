@@ -159,14 +159,16 @@ export const getPasswordResetMailOptions = function(email:string){
     email: email
   };
   
-  //if the passwordResetTokens array is not empty check to see if there are any current pending tokens for the email and remove them
+  //check to see if there are any current pending tokens for the email in mongoDB and remove them
+  //////////////////////////////////////////////
   if (passwordResetTokens.length>0){
     for (let i = passwordResetTokens.length - 1; i >= 0; i--) {
       if (passwordResetTokens[i].email === email) passwordResetTokens.splice(i, 1);
     };     
   };
 
-  //push the password reset object to the reset tokens array for retrieval later
+  //create a password reset document in mongodb
+  //////////////////////////////////////////////
   passwordResetTokens.push(passwordReset);
 
   return({

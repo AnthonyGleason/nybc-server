@@ -311,7 +311,12 @@ describe('users',()=>{
         });
       expect(forgotPasswordResponse.status).toBe(HttpStatusCodes.OK);
       expect(forgotPasswordResponse.body.isEmailSent).toBe(true);
-      //get the status of the reset
+      /* 
+        get the status of the reset using an admin account (add an admin account to the global before all)
+        it has to be done this way because we DO NOT have access to the users email we cannot perform testing on that
+
+        start working in email ts for the forgot password route by making a model and schema for password reset interface
+      */
 
       /*
         need to create a dummy mongodb document for a password reset
@@ -329,6 +334,7 @@ describe('users',()=>{
       expect(true).toBe(false);
     });
   });
+
   describe('account settings',()=>{
     describe('get account settings',()=>{
       it('should return unauthorized if a jwt token was not provided', async()=>{
@@ -351,7 +357,22 @@ describe('users',()=>{
         expect(response.body.email).toBe(USER_EMAIL);
       });
     });
+    // if there is any major issues with testing try commenting out the below block it seems to be causing many issues possibly due to reusing account info
     describe('update account settings',()=>{
+      let accountSettingsToken:any;
+      beforeAll(async ()=>{
+        //register a new user
+        const response = await supertest(app)
+          .post('/api/users/register')
+          .send({
+            firstName: USER_FIRST_NAME,
+            lastName: USER_LAST_NAME,
+            email: 'accountsettingsuser@nybagelsclub.com',
+            password: USER_PASS,
+            passwordConfirm: USER_PASS_CONF
+          })
+        accountSettingsToken = response.body.token;
+      });
       it('should return unauthorized if a jwt token was not provided', async()=>{
         const response = await supertest(app)
           .put('/api/users/settings')
@@ -361,15 +382,15 @@ describe('users',()=>{
         expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
       it('should return bad request on missing fields', async () => {
-        const missingFields = ['firstName', 'lastName', 'email', 'password', 'passwordConfirm'];
+        const missingFields = ['firstNameInput', 'lastNameInput', 'emailInput', 'passwordInput', 'passwordConfInput','currentPasswordInput'];
         for (const field of missingFields) {
           const userData:any = {
-            firstName: USER_FIRST_NAME,
-            lastName: USER_LAST_NAME,
-            email: USER_EMAIL,
-            password: USER_PASS,
-            passwordConfirm: USER_PASS_CONF,
-            currentPassword: USER_PASS
+            firstNameInput: USER_FIRST_NAME,
+            lastNameInput: USER_LAST_NAME,
+            emailInput: USER_EMAIL,
+            passwordInput: USER_PASS,
+            passwordConfInput: USER_PASS_CONF,
+            currentPasswordInput: USER_PASS
           };
           userData[field] = undefined;
     
@@ -382,11 +403,69 @@ describe('users',()=>{
           expect(response.status).toBe(HttpStatusCodes.BAD_REQUEST);
         };
       });
-      it('should update the current account settings',()=>{
-        expect(true).toBe(false);
+      it('should return bad request if passwords do not match', async()=>{
+        //change each field in the user created in the beforeall
+        const response:any = await supertest(app)
+          .put('/api/users/settings')
+          .set({
+            'Authorization': `Bearer ${createUserResponse.body.token}`
+          })
+          .send({
+            firstNameInput: USER_FIRST_NAME,
+            lastNameInput: USER_LAST_NAME,
+            emailInput: 'accountsettingsuser@nybagelsclub.com',
+            passwordInput: USER_PASS,
+            passwordConfInput: 'updatedPass123',
+            currentPasswordInput: USER_PASS,
+          })
+        expect(response.status).toBe(HttpStatusCodes.BAD_REQUEST);
       });
-      it('should invalidate the current jwt token on account update',()=>{
-        expect(true).toBe(false);
+      it('should return conflict if new email is already taken', async()=>{
+        //try to switch email to an email already taken
+        const response:any = await supertest(app)
+          .put('/api/users/settings')
+          .set({
+            'Authorization': `Bearer ${accountSettingsToken}`
+          })
+          .send({
+            firstNameInput: USER_FIRST_NAME,
+            lastNameInput: USER_LAST_NAME,
+            emailInput: USER_EMAIL,
+            passwordInput: USER_PASS,
+            passwordConfInput: USER_PASS_CONF,
+            currentPasswordInput: USER_PASS,
+          })
+        expect(response.status).toBe(HttpStatusCodes.CONFLICT);
+      });
+      it('should update the current account settings', async ()=>{
+        //change each field in the user created in the beforeall
+        const updateUserResponse:any = await supertest(app)
+          .put('/api/users/settings')
+          .set({
+            'Authorization': `Bearer ${accountSettingsToken}`
+          })
+          .send({
+            firstNameInput: 'updatedFirstName',
+            lastNameInput: 'updatedLastName',
+            emailInput: 'updatedaccountsettingsuser@nybagelsclub.com',
+            passwordInput: 'updatedPass',
+            passwordConfInput: 'updatedPass',
+            currentPasswordInput: USER_PASS,
+          });
+        //verify the fields were correctly updated
+        expect(updateUserResponse.status).toBe(HttpStatusCodes.OK);
+        expect(updateUserResponse.body.user.firstName).toBe('updatedFirstName');
+        expect(updateUserResponse.body.user.lastName).toBe('updatedLastName');
+        expect(updateUserResponse.body.user.email).toBe('updatedaccountsettingsuser@nybagelsclub.com');
+        expect(updateUserResponse.body.user.hashedPassword).toBeDefined();
+        expect(updateUserResponse.body.wasUserUpdated).toBe(true);
+        //verify the token was invalidated
+        const verifyResponse:any = await supertest(app)
+          .get('/api/users/verify')
+          .set({
+            'Authorization': `Bearer ${accountSettingsToken}`
+          })
+        expect(verifyResponse.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
     });
   });
