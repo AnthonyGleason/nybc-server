@@ -80,8 +80,9 @@ export interface Membership{
 export interface PasswordReset{
   email: string,
   resetID: string,
-  dateCreated: Date
-}
+  dateCreated: Date,
+  _id: string //unique id given by mongodb
+};
 
 export interface TempCartToken{
   userID: string,
@@ -97,7 +98,7 @@ export interface PromoCode{
   description:string,
   disabled: boolean,
   perk: string, // for example "Free Shipping", "15% Off", "$25 Off",
-  _id: string //mongodb unique id
+  _id:string | mongoose.Types.ObjectId //unique id given by mongodb
 };
 
 export interface PendingOrder{

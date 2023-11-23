@@ -1,3 +1,4 @@
+import { createPasswordReset } from "@src/controllers/passwordReset";
 import { passwordResetTokens } from "@src/helpers/auth";
 import { getRandomUrlString } from "@src/helpers/misc";
 import { Order, PasswordReset } from "@src/interfaces/interfaces";
@@ -146,30 +147,9 @@ export const getCustomOrderMailOptions = function(
   })
 };
 
-export const getPasswordResetMailOptions = function(email:string){
-  const randomString:string = getRandomUrlString(50);
-
+export const getPasswordResetMailOptions = function(email:string,randomString:string){
   //get a random url string of 50 characters long and generate a reset url with it
   const url:string = `https://nybagelsclub.com/accounts/password/reset/${randomString}`;
-
-  //create the password reset object
-  const passwordReset:PasswordReset = {
-    dateCreated: new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
-    resetID: randomString,
-    email: email
-  };
-  
-  //check to see if there are any current pending tokens for the email in mongoDB and remove them
-  //////////////////////////////////////////////
-  if (passwordResetTokens.length>0){
-    for (let i = passwordResetTokens.length - 1; i >= 0; i--) {
-      if (passwordResetTokens[i].email === email) passwordResetTokens.splice(i, 1);
-    };     
-  };
-
-  //create a password reset document in mongodb
-  //////////////////////////////////////////////
-  passwordResetTokens.push(passwordReset);
 
   return({
     from: 'noreply@nybagelsclub.com',

@@ -1,17 +1,34 @@
 import HttpStatusCodes from "@src/constants/HttpStatusCodes";
+import { salt } from "@src/constants/auth";
+import { createNewUser } from "@src/controllers/user";
 import app from "@src/server";
 import supertest from "supertest";
+import bcrypt from 'bcrypt';
+import { issueUserJWTToken } from "@src/helpers/auth";
+import { PasswordReset, User } from "@src/interfaces/interfaces";
+import { before } from "node:test";
+import { createPasswordReset, getPasswordResetByEmail } from "@src/controllers/passwordReset";
 
 describe('users',()=>{
   //global declarations
   let createUserResponse:any;
+  let createAdminToken:string = '';
+
   //this is the user credentials used to test the below routes (user is created in beforeAll)
   const USER_FIRST_NAME = 'firstName';
   const USER_LAST_NAME = 'lastName';
   const USER_EMAIL = 'newUser@nybagelsclub.com';
   const USER_PASS = 'password';
   const USER_PASS_CONF = 'password';
-  const DELETED_USER_TOKEN = '';
+
+  //create the admin account
+  const ADMIN_FIRST_NAME = 'Admin';
+  const ADMIN_LAST_NAME = 'Admin';
+  const ADMIN_EMAIL = 'admin@nybagelsclub.com';
+  const ADMIN_PASS = 'password';
+  const ADMIN_PASS_CONF = 'password';
+  const ADMIN_GROUP = 'admin';
+  
   //creates a demo user for all tests
   beforeAll(async () => {
     // Create user
@@ -25,6 +42,17 @@ describe('users',()=>{
         passwordConfirm: USER_PASS_CONF
       });
     createUserResponse = response;
+    //insert admin doc and sign a token for it
+    const adminAccountDoc:User = await createNewUser(
+      ADMIN_FIRST_NAME,
+      ADMIN_LAST_NAME,
+      ADMIN_EMAIL,
+      await bcrypt.hash(ADMIN_PASS,salt),
+      new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
+      false,
+      ADMIN_GROUP
+    );
+    createAdminToken = issueUserJWTToken(adminAccountDoc);
   });
 
   ////////////////////////
@@ -271,70 +299,175 @@ describe('users',()=>{
     });
   });
   describe('forgot password',()=>{
-    it('should send a forgot password email', async ()=>{
-      //send forgot password email
-      const forgotPasswordResponse = await supertest(app)
-        .post('/api/users/forgotPassword')
-        .send({
-          email: USER_EMAIL
-        });
-      expect(forgotPasswordResponse.status).toBe(HttpStatusCodes.OK);
-      expect(forgotPasswordResponse.body.isEmailSent).toBe(true);
-    });
-    it('should return bad request if a user email was not provided',async()=>{
-      const forgotPasswordResponse = await supertest(app)
-        .post('/api/users/forgotPassword')
-        .send({
-          email: undefined
-        });
-      expect(forgotPasswordResponse.status).toBe(HttpStatusCodes.BAD_REQUEST);
-    });
-    it('should return not found if a user does not exist with the provided email',async()=>{
-      const forgotPasswordResponse = await supertest(app)
-        .post('/api/users/forgotPassword')
-        .send({
-          email: 'testEmail@nybagelsclub.com'
-        });
-      expect(forgotPasswordResponse.status).toBe(HttpStatusCodes.NOT_FOUND);
-    });
-    it('should return not found if a reset request does not exist for the provided reset id',async()=>{
-      const response = await supertest(app)
-        .get(`/forgotPassword/${'testID'}`)
-      expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
-    });
-    it('should get the status of a forgot password reset',async()=>{
-      //request a password reset
-      const forgotPasswordResponse = await supertest(app)
-        .post('/api/users/forgotPassword')
-        .send({
-          email: USER_EMAIL
-        });
-      expect(forgotPasswordResponse.status).toBe(HttpStatusCodes.OK);
-      expect(forgotPasswordResponse.body.isEmailSent).toBe(true);
-      /* 
-        get the status of the reset using an admin account (add an admin account to the global before all)
-        it has to be done this way because we DO NOT have access to the users email we cannot perform testing on that
+    let PASS_ACC_FIRST_NAME = 'test';
+    let PASS_ACC_LAST_NAME = 'test';
+    let PASS_ACC_EMAIL = 'forgotpasswordaccount@nybagelsclub.com';
+    let PASS_ACC_PASS = 'password123';
 
-        start working in email ts for the forgot password route by making a model and schema for password reset interface
-      */
-
-      /*
-        need to create a dummy mongodb document for a password reset
-        to continue
-      */
-
-      expect(true).toBe(false);
+    beforeAll(async ()=>{
+      //register a test account
+      await createNewUser(
+        PASS_ACC_FIRST_NAME,
+        PASS_ACC_LAST_NAME,
+        PASS_ACC_EMAIL,
+        await bcrypt.hash(PASS_ACC_PASS,salt),
+        new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
+        false
+      );
+      //request a password reset for the test account
+      await supertest(app)
+        .post('/api/users/forgotPassword')
+        .set({
+          email: PASS_ACC_EMAIL
+        });
     });
-    it('should update the users password',async()=>{
-      //~~see the above test need a mongodb document of password resets to continue
+    //optimize with promise.all the routes used they are too slow
+    describe('request reset',()=>{
+      it('should send a forgot password email', async ()=>{
+        //send forgot password email
+        const forgotPasswordResponse = await supertest(app)
+          .post('/api/users/forgotPassword')
+          .send({
+            email: USER_EMAIL
+          });
+        expect(forgotPasswordResponse.status).toBe(HttpStatusCodes.OK);
+        expect(forgotPasswordResponse.body.isEmailSent).toBe(true);
+      });
+      it('should return bad request if a user email was not provided',async()=>{
+        const forgotPasswordResponse = await supertest(app)
+          .post('/api/users/forgotPassword')
+          .send({
+            email: undefined
+          });
+        expect(forgotPasswordResponse.status).toBe(HttpStatusCodes.BAD_REQUEST);
+      });
+      it('should return not found if a user does not exist with the provided email',async()=>{
+        const forgotPasswordResponse = await supertest(app)
+          .post('/api/users/forgotPassword')
+          .send({
+            email: 'testEmail@nybagelsclub.com'
+          });
+        expect(forgotPasswordResponse.status).toBe(HttpStatusCodes.NOT_FOUND);
+      });
+    });
+    describe('get password reset status',()=>{
+      it('should return not found if a reset request does not exist for the provided reset id',async()=>{
+        const response = await supertest(app)
+          .get(`/forgotPassword/${'testID'}`)
+        expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
+      });
+      it('should return true if the password reset is valid',async()=>{
+        //request a password reset
+        const response = await supertest(app)
+          .post('/api/users/forgotPassword')
+          .send({
+            email: PASS_ACC_EMAIL
+          });
+        expect(response.status).toBe(HttpStatusCodes.OK);
+        expect(response.body.isEmailSent).toBe(true);
+        const passResetStatusResponse = await supertest(app)
+          .post('/api/admin/users/passwordResetStatus')
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+          .send({
+            email: PASS_ACC_EMAIL
+          });
+        expect(passResetStatusResponse.status).toBe(HttpStatusCodes.OK);
+        expect(passResetStatusResponse.body.isExpired).toBe(false);
+      });
+      it('should return false if the password reset is invalid',async()=>{
+        //insert a password reset doc with an expired date
+        await createPasswordReset(
+          'invalidPasswordReset@nybagelsclub.com',
+          'resetID123',
+          new Date('December 1, 2001')
+        );
+        //request the password reset doc from the admin account
+        const passResetStatusResponse = await supertest(app)
+          .post('/api/admin/users/passwordResetStatus')
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+          .send({
+            email: 'invalidPasswordReset@nybagelsclub.com'
+          });
+        expect(passResetStatusResponse.status).toBe(HttpStatusCodes.UNAUTHORIZED);
+        expect(passResetStatusResponse.body.isExpired).toBe(true);
+      });
+    });
+    describe('update password',()=>{
+      let UP_PASS_ACC_FIRST_NAME = 'test';
+      let UP_PASS_ACC_LAST_NAME = 'test';
+      let UP_PASS_ACC_EMAIL = 'updatepasswordaccount@nybagelsclub.com';
+      let UP_PASS_ACC_PASS = 'password123';
 
-      //register a user
-      //request a password reset
-      //update the password
-      expect(true).toBe(false);
+      beforeAll(async ()=>{
+        //register a test account
+        await createNewUser(
+          UP_PASS_ACC_FIRST_NAME,
+          UP_PASS_ACC_LAST_NAME,
+          UP_PASS_ACC_EMAIL,
+          await bcrypt.hash(UP_PASS_ACC_PASS,salt),
+          new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
+          false
+        );
+        //request a password reset for the test account
+        await supertest(app)
+          .post('/api/users/forgotPassword')
+          .send({
+            email: UP_PASS_ACC_EMAIL
+          });
+      });
+      it('should update the users password',async()=>{
+        //update the password of the test account in the before all
+        const passwordResetDoc: PasswordReset | null = await getPasswordResetByEmail(UP_PASS_ACC_EMAIL);
+        if (passwordResetDoc){
+          const response = await supertest(app)
+            .put(`/api/users/forgotPassword/${passwordResetDoc.resetID}`)
+            .send({
+              password: 'updatedPassword',
+              passwordConf: 'updatedPassword'
+            });
+          expect(response.status).toBe(HttpStatusCodes.OK);
+        };
+        //attempt to login with the new password a token should be provided
+        const loginResponse = await supertest(app)
+          .post('/api/users/login')
+          .send({
+            email: UP_PASS_ACC_EMAIL,
+            password: 'updatedPassword'
+          });
+        expect(loginResponse.status).toBe(HttpStatusCodes.OK);
+        expect(loginResponse.body.token).toBeDefined();
+      });
+      it('should return bad request if missing required input fields', async()=>{
+        const missingFields = ['password', 'passwordConf'];
+    
+        for (const field of missingFields) {
+          const body:any = {
+            password: USER_PASS,
+            passwordConf: USER_PASS_CONF
+          };
+          body[field] = undefined;
+    
+          const response = await supertest(app)
+          .put('/api/users/forgotPassword/testID')
+          .send(body);
+          expect(response.status).toBe(HttpStatusCodes.BAD_REQUEST);
+        }
+      });
+      it('should return an error if password inputs do not match', async()=>{
+        const response = await supertest(app)
+          .put('/api/users/forgotPassword/testID')
+          .send({
+            password: USER_PASS,
+            passwordConf: 'PasswordDoesNotMatch'
+          })
+        expect(response.status).toBe(HttpStatusCodes.BAD_REQUEST);
+      });
     });
   });
-
   describe('account settings',()=>{
     describe('get account settings',()=>{
       it('should return unauthorized if a jwt token was not provided', async()=>{

@@ -12,6 +12,9 @@ import { handleError } from "@src/helpers/error";
 import { getNewRegistrationMailOptions, getPasswordResetMailOptions } from "@src/constants/emails";
 import { getMostRecentOrderByUserID, getOrderByOrderID } from "@src/controllers/order";
 import { stripe } from "@src/util/stripe";
+import { getRandomUrlString } from "@src/helpers/misc";
+import { createPasswordReset, deletePasswordResetByDocID, deletePasswordResetByEmail, getPasswordResetByEmail, getPasswordResetByResetID } from "@src/controllers/passwordReset";
+import { isPasswordResetExpired } from "@src/helpers/passwordReset";
 
 const usersRouter = Router();
 
@@ -166,43 +169,40 @@ usersRouter.delete('/membershipLevel',authenticateLoginToken, async(req:any,res,
   res.status(HttpStatusCodes.OK).json({});
 });
 
-//send forgot password email
-usersRouter.post('/forgotPassword', async(req:any,res,next)=>{
+usersRouter.post('/forgotPassword', async (req: any, res: any, next: any) => {
   try{
-    const userEmail:string | undefined = req.body.email;
-    //an email was not provided by the user
+    const userEmail: string | undefined = req.body.email;
     if (!userEmail) throw new Error('A user email was not provided.');
+    const userDoc = await getUserByEmail(userEmail);
+    if (await getPasswordResetByEmail(userEmail)) await deletePasswordResetByEmail(userEmail);
     try{
-      const userDoc:User | null = await getUserByEmail(userEmail);
       if (!userDoc) throw new Error('A user was not found with the provided email.');
+      const randomString: string = getRandomUrlString(50);
+      await createPasswordReset(
+        userEmail,
+        randomString,
+        new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+      );
+      const emailResponse = await transporter.sendMail(getPasswordResetMailOptions(userEmail, randomString));
+      res.status(HttpStatusCodes.OK).json({ isEmailSent: emailResponse.accepted.length === 1 });
     }catch(err){
       handleError(res,HttpStatusCodes.NOT_FOUND,err);
     };
-    //send password reset email
-    const emailResponse = await transporter.sendMail(getPasswordResetMailOptions(userEmail));
- 
-    res.status(HttpStatusCodes.OK).json({isEmailSent: emailResponse.accepted.length===1});
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
 });
 
+
 //get forgot password status
-usersRouter.get('/forgotPassword/:resetID',(req,res,next)=>{
+usersRouter.get('/forgotPassword/:resetID',async (req,res,next)=>{
   let isExpired:boolean = true;
   const resetID:string = req.params.resetID;
-
   try{
     //find the password reset item
-    const foundItem:PasswordReset | undefined = passwordResetTokens.find(item => item.resetID === resetID);
-    if (!foundItem) throw new Error('Password reset item not found. Please make another password reset request to proceed.');
-    
-    //calculate expired status
-    const currentTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })); // Get the current time
-    const tenMinutesAgo = new Date(currentTime.getTime() - 10 * 60 * 1000); // Calculate time 10 minutes ago
-    const dateCreated = new Date(foundItem.dateCreated);
-    isExpired = dateCreated <= tenMinutesAgo;
-    
+    const passwordResetDoc:PasswordReset | null = await getPasswordResetByResetID(resetID);
+    if (!passwordResetDoc) throw new Error('A password reset doc was not found.');
+    isExpired = isPasswordResetExpired(passwordResetDoc);   
     res.status(HttpStatusCodes.OK).json({isExpired: isExpired});
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
@@ -212,44 +212,32 @@ usersRouter.get('/forgotPassword/:resetID',(req,res,next)=>{
 //forgot password update route
 usersRouter.put('/forgotPassword/:resetID', async (req,res,next)=>{
   let isExpired:boolean = true;
-  let foundItem:PasswordReset | undefined;
+  let passwordResetDoc:PasswordReset | null;
   let userDoc:User | null = null;
 
   const resetID:string = req.params.resetID;
   //get password and password conf from req body
   const password:string = req.body.password;
   const passwordConf:string = req.body.passwordConf;
-
-  try{  
-    //attempt to get token from array
-    foundItem = passwordResetTokens.find(item => item.resetID === resetID);
-    if (!foundItem) throw new Error('Password reset item not found. Please make another password reset request to proceed.');
-
-    //determine if token is expired
-    const currentTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })); // Get the current time in eastern
-    const tenMinutesAgo = new Date(currentTime.getTime() - 10 * 60 * 1000); // Calculate time 10 minutes ago
-    const dateCreated = new Date(foundItem.dateCreated);
-    isExpired = dateCreated <= tenMinutesAgo;
-
-    //get user doc based on email
-    userDoc = await getUserByEmail(foundItem.email);
-  }catch(err){
-    handleError(res,HttpStatusCodes.NOT_FOUND,err);
-  };
-
+  
   try{
+    if (!password || !passwordConf) throw new Error('Required password inputs were not provided.');
     if (password!==passwordConf) throw new Error('Provided passwords do not match.');
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
 
-  try{
-    if (!isExpired) throw new Error('The password reset link is expired.');
-  }catch(err){
-    handleError(res,HttpStatusCodes.UNAUTHORIZED,err);
-  };
-
-  try{
+  try{  
+    passwordResetDoc = await getPasswordResetByResetID(resetID);
+    if (!passwordResetDoc) throw new Error('A password reset doc was not provided.');
+    try{
+      isExpired = isPasswordResetExpired(passwordResetDoc);
+      if (isExpired) throw new Error('The password reset link is expired.');
+    }catch(err){
+      handleError(res,HttpStatusCodes.UNAUTHORIZED,err);
+    };
+    //get user doc based on email
+    userDoc = await getUserByEmail(passwordResetDoc.email);
     //update the doc locally
     if (!userDoc) throw new Error('A user doc was not found');
 
@@ -260,6 +248,8 @@ usersRouter.put('/forgotPassword/:resetID', async (req,res,next)=>{
     //update the user doc on mongodb
     await updateUserByUserID(userDoc._id as string,userDoc);
 
+    //delete the password reset from mongodDB
+    await deletePasswordResetByDocID(passwordResetDoc._id);
     //return status to user
     res.status(HttpStatusCodes.OK).json({
       isExpired: isExpired,

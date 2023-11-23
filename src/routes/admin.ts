@@ -1,9 +1,11 @@
 import HttpStatusCodes from '@src/constants/HttpStatusCodes';
 import { getMembershipByUserID } from '@src/controllers/membership';
 import { getAllOrders, getAllOrdersByUserID, getAllPendingOrders, getAllProcessingOrders, getOrderByOrderID, getOrderByPromoCodeID, searchForOrderByOrderID, searchForUserByUserID, updateOrderByOrderID } from '@src/controllers/order';
+import { getPasswordResetByEmail } from '@src/controllers/passwordReset';
 import { getAllPromoCodes, getPromoCodeByCode, getPromoCodeByID, updatePromoCodeByID } from '@src/controllers/promocode';
 import { handleError } from '@src/helpers/error';
-import { Membership, Order, PromoCode, User } from '@src/interfaces/interfaces';
+import { isPasswordResetExpired } from '@src/helpers/passwordReset';
+import { Membership, Order, PasswordReset, PromoCode, User } from '@src/interfaces/interfaces';
 import { authenticateAdmin, authenticateLoginToken } from '@src/middlewares/auth';
 import {Router} from 'express';
 
@@ -14,22 +16,41 @@ adminRouter.get('/verifyAdmin',authenticateLoginToken,authenticateAdmin,async(re
   res.status(200).json({isAdmin: true});
 });
 
+adminRouter.post('/users/passwordResetStatus',authenticateLoginToken,authenticateAdmin,async (req:any,res,next)=>{
+  const email:string = req.body.email;
+  try{
+    const passwordResetDoc: PasswordReset | null = await getPasswordResetByEmail(email);
+    if (!passwordResetDoc) throw new Error('A password reset doc was not found.');
+    const isExpired:boolean = isPasswordResetExpired(passwordResetDoc); 
+    if (isExpired){
+      res.status(HttpStatusCodes.UNAUTHORIZED).json({isExpired: isExpired});
+    }else{
+      res.status(HttpStatusCodes.OK).json({isExpired: isExpired});
+    }
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  };
+});
+
 //get promo code sales data
 adminRouter.get('/promoCode/:id/calc',authenticateLoginToken,authenticateAdmin, async (req:any,res,next)=>{
   const docID: string = req.params.id;
   let promoTotalSales:number = 0;
-  
-  //get all orders by promo code id
-  const allOrders:Order[] | null= await getOrderByPromoCodeID(docID);
-
-  //calculate total sales
-  if (allOrders){
-    allOrders.map((order:Order)=>{
-      promoTotalSales += order.cart.finalPriceInDollars;
-    });
+  try{
+    //get all orders by promo code id
+    const allOrders:Order[] | null= await getOrderByPromoCodeID(docID);
+    if (!allOrders) throw new Error('There are no orders placed for the provided promo code.');
+    //calculate total sales
+    if (allOrders){
+      allOrders.map((order:Order)=>{
+        promoTotalSales += order.cart.finalPriceInDollars;
+      });
+    };
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
   //return the total sales to the client
-  res.status(HttpStatusCodes.OK).json({promoTotalSales: promoTotalSales.toFixed(2)})
+  res.status(HttpStatusCodes.OK).json({promoTotalSales: promoTotalSales.toFixed(2)});
 });
 
 //update a promo code
@@ -55,13 +76,13 @@ adminRouter.put('/promoCode/:id',authenticateLoginToken,authenticateAdmin,async 
     res.status(HttpStatusCodes.NOT_MODIFIED).json({});
   };
 });
-// get promo code data for user
+
+// get all promo codes
 adminRouter.get('/promoCode',authenticateLoginToken,authenticateAdmin, async(req,res,next)=>{
   const promoCodeData = await getAllPromoCodes();
   res.status(HttpStatusCodes.OK).json({promoCodeData: promoCodeData});
 })
 
-// calculate total sales for a promo code
 //search for order by name
 adminRouter.get('/orders/search/:searchQuery',authenticateLoginToken,authenticateAdmin, async (req:any,res,next)=>{
   //get the search query from the request params
@@ -199,4 +220,4 @@ adminRouter.get('/users/memberships',authenticateLoginToken,authenticateAdmin, a
   }
 });
 
-export default adminRouter
+export default adminRouter;

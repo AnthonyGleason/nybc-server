@@ -91,12 +91,12 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
       //add +1 to total uses
       let updatedPromoCodeDoc:PromoCode = promoCodeDoc;
       updatedPromoCodeDoc.totalTimesUsed+=1;
-      updatePromoCodeByID(promoCodeDoc._id,updatedPromoCodeDoc);
+      updatePromoCodeByID(promoCodeDoc._id.toString(),updatedPromoCodeDoc);
       
       const discountAmount:number = cart.calcPromoCodeDiscountAmount(promoCodeDoc.perk);
 
       //set the promo code in the user's cart
-      cart.promoCodeID = promoCodeDoc._id;
+      cart.promoCodeID = promoCodeDoc._id.toString();
 
       //verify payment intent exists
       if (!paymentIntent) throw new Error('There was an error obtaining the payment intent.');
