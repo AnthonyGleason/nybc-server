@@ -450,7 +450,7 @@ describe('admin',()=>{
     describe("get a user's membership data",()=>{
       it('should return unauthorized if a bearer token was not provided', async()=>{
         const response = await supertest(app)
-          .get('/api/admin/users/memberships')
+          .get('/api/admin/users/memberships/testID')
           .set({
             'Authorization': `Bearer ${undefined}`
           })
@@ -458,7 +458,7 @@ describe('admin',()=>{
       });
       it('should return unauthorized if the user is not an admin',async()=>{
         const response = await supertest(app)
-          .get('/api/admin/users/memberships')
+          .get('/api/admin/users/memberships/testID')
           .set({
             'Authorization': `Bearer ${createUserToken}`
           })
@@ -466,7 +466,7 @@ describe('admin',()=>{
       });
       it('should return not found if a membership doc was not found',async()=>{
         const response = await supertest(app)
-          .get('/api/admin/users/memberships')
+          .get('/api/admin/users/memberships/testID')
           .set({
             'Authorization': `Bearer ${createAdminToken}`
           })
@@ -477,12 +477,9 @@ describe('admin',()=>{
       });
       it('should get membership info for a user',async()=>{
         const response = await supertest(app)
-          .get('/api/admin/users/memberships')
+          .get(`/api/admin/users/memberships/${userDoc._id}`)
           .set({
             'Authorization': `Bearer ${createAdminToken}`
-          })
-          .send({
-            userID: `${userDoc._id}`
           })
         expect(response.status).toBe(HttpStatusCodes.OK);
         expect(response.body.membershipDoc.userID).toBe(userDoc._id);

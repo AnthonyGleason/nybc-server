@@ -213,8 +213,8 @@ adminRouter.get('/users/search/:searchQuery',authenticateLoginToken,authenticate
   }
 });
 
-adminRouter.get('/users/memberships',authenticateLoginToken,authenticateAdmin, async (req:any,res,next)=>{
-  const userID:string = req.body.userID;
+adminRouter.get('/users/memberships/:userID',authenticateLoginToken,authenticateAdmin, async (req:any,res,next)=>{
+  const userID:string = req.params.userID;
   try{
     const membershipDoc:Membership | null = await getMembershipByUserID(userID);
     if (!membershipDoc) throw new Error('A membership doc was not found.');
