@@ -6,8 +6,8 @@ import supertest from "supertest";
 import bcrypt from 'bcrypt';
 import { issueUserJWTToken } from "@src/helpers/auth";
 import { PasswordReset, User } from "@src/interfaces/interfaces";
-import { before } from "node:test";
 import { createPasswordReset, getPasswordResetByEmail } from "@src/controllers/passwordReset";
+import mongoose from "mongoose";
 
 describe('users',()=>{
   //global declarations
@@ -42,6 +42,7 @@ describe('users',()=>{
         passwordConfirm: USER_PASS_CONF
       });
     createUserResponse = response;
+    
     //insert admin doc and sign a token for it
     const adminAccountDoc:User = await createNewUser(
       ADMIN_FIRST_NAME,
@@ -55,6 +56,10 @@ describe('users',()=>{
     createAdminToken = issueUserJWTToken(adminAccountDoc);
   });
 
+  afterAll(async ()=>{
+    await mongoose.connection.db.dropDatabase();
+  });
+  
   ////////////////////////
   //  Begin testing
   ////////////////////////

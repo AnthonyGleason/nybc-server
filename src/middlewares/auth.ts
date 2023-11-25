@@ -57,7 +57,7 @@ export const authenticateAdmin = async function(req:any, res:any, next:any) {
   if (userDoc && userDoc.group==='admin'){
     next();
   }else{
-    res.status(HttpStatusCodes.UNAUTHORIZED);
+    res.status(HttpStatusCodes.UNAUTHORIZED).json({isAdmin: false});
   }
 };
 

@@ -39,7 +39,7 @@ adminRouter.get('/promoCode/:id/calc',authenticateLoginToken,authenticateAdmin, 
   try{
     //get all orders by promo code id
     const allOrders:Order[] | null= await getOrderByPromoCodeID(docID);
-    if (!allOrders) throw new Error('There are no orders placed for the provided promo code.');
+    if (!allOrders || allOrders.length===0) throw new Error('There are no orders placed for the provided promo code.');
     //calculate total sales
     if (allOrders){
       allOrders.map((order:Order)=>{
@@ -65,15 +65,18 @@ adminRouter.put('/promoCode/:id',authenticateLoginToken,authenticateAdmin,async 
     description:string
   } = req.body;
   const docID:string = req.params.id;
-  let tempPromoCodeDoc:PromoCode | null = await getPromoCodeByID(docID);
-  if (tempPromoCodeDoc){
+  try{
+    let tempPromoCodeDoc:PromoCode | null = await getPromoCodeByID(docID);
+    if (!tempPromoCodeDoc) throw new Error('A promo code doc was not found for the provided id.');
     if (description) tempPromoCodeDoc.description = description;
     if (isDisabled) tempPromoCodeDoc.disabled = isDisabled;
     if (totalAllowedUses) tempPromoCodeDoc.totalAllowedUses = totalAllowedUses;
-    await updatePromoCodeByID(docID,tempPromoCodeDoc);
-    res.status(HttpStatusCodes.OK).json({});
-  }else{
-    res.status(HttpStatusCodes.NOT_MODIFIED).json({});
+    const updatedPromoCodeDoc:PromoCode | null = await updatePromoCodeByID(docID,tempPromoCodeDoc);
+    res.status(HttpStatusCodes.OK).json({
+      promoCode: updatedPromoCodeDoc
+    });
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
 });
 
@@ -201,23 +204,24 @@ adminRouter.get('/orders/', authenticateLoginToken, authenticateAdmin, async (re
 adminRouter.get('/users/search/:searchQuery',authenticateLoginToken,authenticateAdmin, async (req:any,res,next)=>{
   //get the search query from the request params
   const searchQuery:string = req.params.searchQuery;
-  const userResults :User[] | null = await searchForUserByUserID(searchQuery);
-  if (userResults){
+  try{
+    const userResults :User[] | null = await searchForUserByUserID(searchQuery);
+    if (!userResults|| userResults.length===0) throw new Error('A user was not found for the provided userID');
     res.status(HttpStatusCodes.OK).json({'results': userResults});
-  }else{
-    res.status(HttpStatusCodes.NOT_FOUND).json({});
-  };
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  }
 });
 
 adminRouter.get('/users/memberships',authenticateLoginToken,authenticateAdmin, async (req:any,res,next)=>{
-  const userID:string = req.payload.loginPayload.user._id;
-  const membershipDoc:Membership | null = await getMembershipByUserID(userID);
-  
-  if (membershipDoc){
+  const userID:string = req.body.userID;
+  try{
+    const membershipDoc:Membership | null = await getMembershipByUserID(userID);
+    if (!membershipDoc) throw new Error('A membership doc was not found.');
     res.status(HttpStatusCodes.OK).json({'membershipDoc': membershipDoc});
-  }else{
-    res.status(HttpStatusCodes.NOT_FOUND).json({});
-  }
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  };
 });
 
 export default adminRouter;
