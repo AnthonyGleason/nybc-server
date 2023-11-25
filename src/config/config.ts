@@ -1,1 +1,1 @@
-export const isTestingModeEnabled:boolean = false;
+export const isTestingModeEnabled:boolean = true;
