@@ -231,9 +231,10 @@ describe('admin',()=>{
     describe('update a promo code',()=>{
       let promoCodeID:string = '';
       let createAdminToken:string = '';
-
+      let createUserToken:string = '';
       beforeAll(async()=>{
         createAdminToken = await createAdminAccount();
+        createUserToken = await createUserAccount();
         //insert a promo code
         const promoCodeDoc:PromoCode = await createPromoCode(
           'TEST25',
@@ -249,6 +250,32 @@ describe('admin',()=>{
       });
       afterAll(async()=>{
         await mongoose.connection.dropDatabase();
+      });
+      it('should return unauthorized if a jwt token was not provided',async()=>{
+        const response = await supertest(app)
+          .put(`/api/admin/promoCode/'does not exist'`)
+          .set({
+            'Authorization': `Bearer ${undefined}`
+          })
+          .send({
+            totalAllowedUses: 1,
+            isDisabled: true,
+            description: 'Updated Description'
+          });
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
+      });
+      it('should return unauthorized if the user is not an admin', async()=>{
+        const response = await supertest(app)
+          .put(`/api/admin/promoCode/'does not exist'`)
+          .set({
+            'Authorization': `Bearer ${createUserToken}`
+          })
+          .send({
+            totalAllowedUses: 1,
+            isDisabled: true,
+            description: 'Updated Description'
+          });
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
       it('should return not found if promo code does not exist',async()=>{
         const response = await supertest(app)
@@ -281,70 +308,227 @@ describe('admin',()=>{
       });
     });
     describe('get all promo codes',()=>{
-      beforeAll(()=>{
-        //create 3 promo codes
-      })
-      afterAll(()=>{
-        //delete the 3 promo codes
-      })
-      it('should get all promo codes',()=>{
-        expect(true).toBe(false);
+      let createAdminToken:string = '';
+      let createUserToken:string = '';
+      beforeAll(async ()=>{
+        createUserToken = await createUserAccount();
+        createAdminToken = await createAdminAccount();
+        await createPromoCode(
+          'TEST25',
+          new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
+          '123',
+          'test promo code',
+          '25_PERCENT_OFF',
+          100,
+          false
+        );
+        await createPromoCode(
+          'TEST25',
+          new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
+          '123',
+          'test promo code',
+          '25_PERCENT_OFF',
+          100,
+          false
+        );
+        await createPromoCode(
+          'TEST25',
+          new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
+          '123',
+          'test promo code',
+          '25_PERCENT_OFF',
+          100,
+          false
+        );
+      });
+      afterAll(async ()=>{
+        await mongoose.connection.dropDatabase();
+      });
+      it('should return unauthorized if the user is not an admin', async()=>{
+        const response = await supertest(app)
+          .get('/api/admin/promoCode')
+          .set({
+            'Authorization': `Bearer ${createUserToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
+      });
+      it('should return unauthorized if no jwt token was provided', async()=>{
+        const response = await supertest(app)
+          .get('/api/admin/promoCode')
+          .set({
+            'Authorization': `Bearer ${undefined}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
+      });
+      it('should get all promo codes',async ()=>{
+        const response = await supertest(app)
+          .get('/api/admin/promoCode')
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.OK);
+        expect(response.body.promoCodeData.length).toBe(3); // 3 promo codes total
       });
     });
   });
   describe('orders',()=>{
     describe('get an order',()=>{
-      beforeAll(()=>{
+      let createAdminToken:string = '';
+      let createUserToken:string = '';
+      let orderDoc:Order;
+      beforeAll(async ()=>{
+        createAdminToken = await createAdminAccount(); 
+        createUserToken = await createUserAccount();
         //insert an order
+        const shippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const cart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        orderDoc = await createOrder(
+          '123', //fake userID doesnt need to be real
+          cart,
+          shippingAddress,
+          undefined
+        );
       });
-      afterAll(()=>{
-        //delete the order
+      afterAll(async ()=>{
+        await mongoose.connection.dropDatabase();
+      });
+      it('should return unauthorized if a jwt token was not provided', async()=>{
+        const response = await supertest(app)
+          .get(`/api/admin/orders/test`)
+          .set({
+            'Authorization': `Bearer ${undefined}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
+      });
+      it('should return unauthorized if the user is not an admin', async()=>{
+        const response = await supertest(app)
+          .get(`/api/admin/orders/test`)
+          .set({
+            'Authorization': `Bearer ${createUserToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
+      });
+      it('should get an order',async ()=>{
+        const response = await supertest(app)
+          .get(`/api/admin/orders/${orderDoc._id.toString()}`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.OK);
+        console.log(response);
+        expect(response.body.order._id.toString()).toBe(orderDoc._id);
+      });
+      it('should return not found if an order does not exist for that id', async()=>{
+        const response = await supertest(app)
+          .get(`/api/admin/orders/test`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
       })
-      it('should get an order',()=>{
-        expect(true).toBe(false);
-      });
     });
     describe('update an order',()=>{
-      beforeAll(()=>{
-        //insert a dummy order
+      let createAdminToken:string = '';
+      let createUserToken:string = '';
+      beforeAll(async ()=>{
+        createAdminToken = await createAdminAccount(); 
+        createUserToken = await createUserAccount();
+        //insert an order
+        
       });
-      afterAll(()=>{
-        //delete the order
+      afterAll(async ()=>{
+        await mongoose.connection.dropDatabase();
+      });
+      it('should return unauthorized if a jwt token was not provided', async()=>{
+        expect(true).toBe(false);
+      });
+      it('should return unauthorized if the user is not an admin', async()=>{
+        expect(true).toBe(false);
       });
       it('should update an order',()=>{
         expect(true).toBe(false);
       });
     });
-    describe('get all pending orders',()=>{
-      beforeAll(()=>{
-        //insert 2 pending orders and 1 processing order
+    describe('search for an order',()=>{
+      let createAdminToken:string = '';
+      let createUserToken:string = '';
+      beforeAll(async ()=>{
+        createAdminToken = await createAdminAccount(); 
+        createUserToken = await createUserAccount();
+        //insert an order
+        
       });
-      afterAll(()=>{
-        //delete the 3 orders
+      afterAll(async ()=>{
+        await mongoose.connection.dropDatabase();
+      });
+      it('should return unauthorized if a jwt token was not provided', async()=>{
+        expect(true).toBe(false);
+      });
+      it('should return unauthorized if the user is not an admin', async()=>{
+        expect(true).toBe(false);
+      });
+      it('should get an order by order ID',()=>{
+        expect(true).toBe(false);
+      });
+    });
+    describe('get all pending orders',()=>{
+      let createAdminToken:string = '';
+      let createUserToken:string = '';
+      beforeAll(async ()=>{
+        createAdminToken = await createAdminAccount(); 
+        createUserToken = await createUserAccount();
+        //insert two pending orders and one processing order
+        
+      });
+      afterAll(async ()=>{
+        await mongoose.connection.dropDatabase();
+      });
+      it('should return unauthorized if a jwt token was not provided', async()=>{
+        expect(true).toBe(false);
+      });
+      it('should return unauthorized if the user is not an admin', async()=>{
+        expect(true).toBe(false);
       });
       it('should get all pending orders',()=>{
         expect(true).toBe(false);
       });
     });
     describe('get all processing orders',()=>{
-      beforeAll(()=>{
-        //insert 2 processing orders and 1 pending order
+      let createAdminToken:string = '';
+      let createUserToken:string = '';
+      beforeAll(async ()=>{
+        createAdminToken = await createAdminAccount(); 
+        createUserToken = await createUserAccount();
+        //insert one pending order and two processing orders
+        
       });
-      afterAll(()=>{
-        //delete the 3 orders
+      afterAll(async ()=>{
+        await mongoose.connection.dropDatabase();
       });
-      it('should get all processing orders',()=>{
+      it('should return unauthorized if a jwt token was not provided', async()=>{
         expect(true).toBe(false);
       });
-    });
-    describe('search for an order',()=>{
-      beforeAll(()=>{
-        //insert an order
+      it('should return unauthorized if the user is not an admin', async()=>{
+        expect(true).toBe(false);
       });
-      afterAll(()=>{
-        //delete the order
-      });
-      it('should get an order by order ID',()=>{
+      it('should get all processing orders',()=>{
         expect(true).toBe(false);
       });
     });
@@ -357,6 +541,12 @@ describe('admin',()=>{
         //delete the user
         //delete the 3 orders
       })
+      it('should return unauthorized if a jwt token was not provided', async()=>{
+        expect(true).toBe(false);
+      });
+      it('should return unauthorized if the user is not an admin', async()=>{
+        expect(true).toBe(false);
+      });
       it('should get all orders for a user',()=>{
         expect(true).toBe(false);
       });
@@ -365,6 +555,12 @@ describe('admin',()=>{
       beforeAll(()=>{
         //create two users
         //give each user the same 3 orders
+      });
+      it('should return unauthorized if a jwt token was not provided', async()=>{
+        expect(true).toBe(false);
+      });
+      it('should return unauthorized if the user is not an admin', async()=>{
+        expect(true).toBe(false);
       });
       it('should get all orders',()=>{
         expect(true).toBe(false);
