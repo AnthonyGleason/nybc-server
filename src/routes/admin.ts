@@ -86,12 +86,12 @@ adminRouter.get('/promoCode',authenticateLoginToken,authenticateAdmin, async(req
   res.status(HttpStatusCodes.OK).json({promoCodeData: promoCodeData});
 })
 
-//search for order by name
+//search for order by orderID
 adminRouter.get('/orders/search/:searchQuery',authenticateLoginToken,authenticateAdmin, async (req:any,res,next)=>{
   //get the search query from the request params
   const searchQuery:string = req.params.searchQuery;
   const orderResults:Order[] | null = await searchForOrderByOrderID(searchQuery);
-  if (orderResults){
+  if (orderResults && orderResults.length!==0){
     res.status(HttpStatusCodes.OK).json({'results': orderResults});
   }else{
     res.status(HttpStatusCodes.NOT_FOUND).json({});
@@ -102,7 +102,7 @@ adminRouter.get('/orders/search/:searchQuery',authenticateLoginToken,authenticat
 adminRouter.get('/orders/pending', authenticateLoginToken, authenticateAdmin, async (req,res,next)=>{
   try{
     const orders:Order[] | null = await getAllPendingOrders();
-    if (!orders) throw new Error('No orders were found. More orders should come in soon!');
+    if (!orders || orders.length===0) throw new Error('No orders were found. More orders should come in soon!');
     res.status(HttpStatusCodes.OK).json({orders: orders});
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
@@ -112,7 +112,18 @@ adminRouter.get('/orders/pending', authenticateLoginToken, authenticateAdmin, as
 adminRouter.get('/orders/processing', authenticateLoginToken, authenticateAdmin, async (req,res,next)=>{
   try{
     const orders:Order[] | null = await getAllProcessingOrders();
-    if (!orders) throw new Error('No orders were found. More orders should come in soon!');
+    if (!orders || orders.length===0) throw new Error('No orders were found. More orders should come in soon!');
+    res.status(HttpStatusCodes.OK).json({orders: orders});
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  };
+});
+//get all orders for a user
+adminRouter.get('/orders/users/:userID', authenticateLoginToken, authenticateAdmin, async (req,res,next)=>{
+  const userID:string = req.params.userID;
+  try{
+    const orders: Order[] | null = await getAllOrdersByUserID(userID);
+    if (!orders || orders.length===0) throw new Error('No orders were found for the specified user.');
     res.status(HttpStatusCodes.OK).json({orders: orders});
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
@@ -172,18 +183,6 @@ adminRouter.put('/orders/:orderID', authenticateLoginToken, authenticateAdmin, a
     }catch(err){
       handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
     };
-  }catch(err){
-    handleError(res,HttpStatusCodes.NOT_FOUND,err);
-  };
-});
-
-//get all orders for a user
-adminRouter.get('/orders/:userID', authenticateLoginToken, authenticateAdmin, async (req,res,next)=>{
-  const userID:string = req.params.userID;
-  try{
-    const orders: Order[] | null = await getAllOrdersByUserID(userID);
-    if (!orders) throw new Error('No orders were found for the specified user.');
-    res.status(HttpStatusCodes.OK).json({orders: orders});
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };

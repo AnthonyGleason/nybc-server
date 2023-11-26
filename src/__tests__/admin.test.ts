@@ -2,7 +2,7 @@ import HttpStatusCodes from '@src/constants/HttpStatusCodes';
 import { salt } from '@src/constants/auth';
 import { createNewUser } from '@src/controllers/user';
 import { issueUserJWTToken } from '@src/helpers/auth';
-import { CartInterface, Order, PromoCode, User } from '@src/interfaces/interfaces';
+import { CartInterface, Order, PendingOrder, PromoCode, User } from '@src/interfaces/interfaces';
 import app from '@src/server';
 import mongoose from 'mongoose';
 import supertest from 'supertest';
@@ -73,6 +73,18 @@ describe('admin',()=>{
           email: 'fakeemail@nybagelsclub.com'
         });
       expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
+    });
+    it('should return unauthorized if no login token was provided', async()=>{
+      //attempt to get a password reset doc with the user token
+      const response = await supertest(app)
+        .post('/api/admin/users/passwordResetStatus')
+        .set({
+          'Authorization': `Bearer ${undefined}`
+        })
+        .send({
+          email: 'fakeemail@nybagelsclub.com'
+        });
+      expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
     });
     it('should return unauthorized if user is not an admin', async()=>{
       //attempt to get a password reset doc with the user token
@@ -207,6 +219,14 @@ describe('admin',()=>{
           .get('/api/admin/promoCode/fakePromoID/calc')
           .set({
             'Authorization': `Bearer ${createUserToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
+      });
+      it('should return unauthorized if no login token was provided',async ()=>{
+        const response = await supertest(app)
+          .get('/api/admin/promoCode/fakePromoID/calc')
+          .set({
+            'Authorization': `Bearer ${undefined}`
           })
         expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
@@ -432,8 +452,7 @@ describe('admin',()=>{
             'Authorization': `Bearer ${createAdminToken}`
           })
         expect(response.status).toBe(HttpStatusCodes.OK);
-        console.log(response);
-        expect(response.body.order._id.toString()).toBe(orderDoc._id);
+        expect(response.body.order._id.toString()).toBe(orderDoc._id.toString());
       });
       it('should return not found if an order does not exist for that id', async()=>{
         const response = await supertest(app)
@@ -447,123 +466,731 @@ describe('admin',()=>{
     describe('update an order',()=>{
       let createAdminToken:string = '';
       let createUserToken:string = '';
+      let orderDoc:Order;
       beforeAll(async ()=>{
         createAdminToken = await createAdminAccount(); 
         createUserToken = await createUserAccount();
         //insert an order
-        
+        const shippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const cart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        orderDoc = await createOrder(
+          '123', //fake userID doesnt need to be real
+          cart,
+          shippingAddress,
+          undefined
+        );
       });
       afterAll(async ()=>{
         await mongoose.connection.dropDatabase();
       });
       it('should return unauthorized if a jwt token was not provided', async()=>{
-        expect(true).toBe(false);
+        const response = await supertest(app)
+          .put('/api/admin/orders/test')
+          .set({
+            'Authorization': `Bearer ${undefined}`
+          });
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
       it('should return unauthorized if the user is not an admin', async()=>{
-        expect(true).toBe(false);
+        const response = await supertest(app)
+          .put('/api/admin/orders/test')
+          .set({
+            'Authorization': `Bearer ${createUserToken}`
+          });
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
-      it('should update an order',()=>{
-        expect(true).toBe(false);
+      it('should return not found if an order does not exist with the id provided', async()=>{
+        const response = await supertest(app)
+          .put('/api/admin/orders/test')
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          });
+        expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
+      });
+      it('should update an order', async()=>{
+        const response = await supertest(app)
+          .put(`/api/admin/orders/${orderDoc._id.toString()}`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+          .send({
+            status: 'Processing',
+            trackingNumberArr: [123],
+            giftMessage: 'gifttest'
+          })
+        expect(response.status).toBe(HttpStatusCodes.OK);
+        expect(response.body.updatedOrder.status).toBe('Processing');
+        expect(response.body.updatedOrder.trackingNumberArr.length).toBe(1);
+        expect(response.body.updatedOrder.trackingNumberArr[0]).toBe('123');
+        expect(response.body.updatedOrder.giftMessage).toBe('gifttest');
       });
     });
     describe('search for an order',()=>{
       let createAdminToken:string = '';
       let createUserToken:string = '';
+      let orderDoc:Order;
       beforeAll(async ()=>{
         createAdminToken = await createAdminAccount(); 
         createUserToken = await createUserAccount();
         //insert an order
-        
+        const shippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const cart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        orderDoc = await createOrder(
+          '123', //fake userID doesnt need to be real
+          cart,
+          shippingAddress,
+          undefined
+        );
       });
+
       afterAll(async ()=>{
         await mongoose.connection.dropDatabase();
       });
+
       it('should return unauthorized if a jwt token was not provided', async()=>{
-        expect(true).toBe(false);
+        const response = await supertest(app)
+          .get('/api/admin/orders/search/doesntExist')
+          .set({
+            'Authorization': `Bearer ${undefined}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
       it('should return unauthorized if the user is not an admin', async()=>{
-        expect(true).toBe(false);
+        const response = await supertest(app)
+          .get('/api/admin/orders/search/doesntExist')
+          .set({
+            'Authorization': `Bearer ${createUserToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
-      it('should get an order by order ID',()=>{
-        expect(true).toBe(false);
+      it('should get an order by order ID',async()=>{
+        const response = await supertest(app)
+          .get(`/api/admin/orders/search/${orderDoc._id.toString()}`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.OK);
+        expect(response.body.results.length).toBe(1);
+        expect(response.body.results[0]._id.toString()).toBe(orderDoc._id.toString());
+      });
+      it('should return not found if an order does not exist', async()=>{
+        const response = await supertest(app)
+          .get('/api/admin/orders/search/doesntExist')
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
       });
     });
     describe('get all pending orders',()=>{
       let createAdminToken:string = '';
       let createUserToken:string = '';
+      let pendingOrderOneDoc:Order;
+      let processingOrderTwoDoc:Order;
+      let processingOrderOneDoc:Order;
       beforeAll(async ()=>{
         createAdminToken = await createAdminAccount(); 
         createUserToken = await createUserAccount();
         //insert two pending orders and one processing order
-        
+        const shippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const cart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        pendingOrderOneDoc = await createOrder(
+          '123', //fake userID doesnt need to be real
+          cart,
+          shippingAddress,
+          undefined
+        );
+        //insert a processing order
+        const processingOneShippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const processingOneCart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        processingOrderOneDoc = await createOrder(
+          '123', //fake userID doesnt need to be real
+          processingOneCart,
+          processingOneShippingAddress,
+          undefined
+        );
+        //insert a proccessing order
+        const processingTwoShippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const processingTwoCart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        processingOrderTwoDoc = await createOrder(
+          '123', //fake userID doesnt need to be real
+          processingTwoCart,
+          processingTwoShippingAddress,
+          undefined
+        );
+
+        //update each order status
+        await supertest(app)
+          .put(`/api/admin/orders/${pendingOrderOneDoc._id.toString()}`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+          .send({
+            status: 'Pending'
+          })
+        await supertest(app)
+          .put(`/api/admin/orders/${processingOrderOneDoc._id.toString()}`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+          .send({
+            status: 'Processing'
+          });
+        await supertest(app)
+          .put(`/api/admin/orders/${processingOrderTwoDoc._id.toString()}`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+          .send({
+            status: 'Processing'
+          });
       });
       afterAll(async ()=>{
         await mongoose.connection.dropDatabase();
       });
       it('should return unauthorized if a jwt token was not provided', async()=>{
-        expect(true).toBe(false);
+        const response = await supertest(app)
+          .get('/api/admin/orders/pending')
+          .set({
+            'Authorization' : `Bearer ${undefined}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
       it('should return unauthorized if the user is not an admin', async()=>{
-        expect(true).toBe(false);
+        const response = await supertest(app)
+          .get('/api/admin/orders/pending')
+          .set({
+            'Authorization' : `Bearer ${createUserToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
-      it('should get all pending orders',()=>{
-        expect(true).toBe(false);
+      it('should get all pending orders',async()=>{
+        const response = await supertest(app)
+          .get('/api/admin/orders/pending')
+          .set({
+            'Authorization' : `Bearer ${createAdminToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.OK);
+        expect(response.body.orders.length).toBe(1);
       });
     });
     describe('get all processing orders',()=>{
       let createAdminToken:string = '';
       let createUserToken:string = '';
+      let pendingOrderOneDoc:Order;
+      let processingOrderTwoDoc:Order;
+      let processingOrderOneDoc:Order;
       beforeAll(async ()=>{
         createAdminToken = await createAdminAccount(); 
         createUserToken = await createUserAccount();
         //insert one pending order and two processing orders
-        
+        //insert a pending order
+        const shippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const cart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        pendingOrderOneDoc = await createOrder(
+          '123', //fake userID doesnt need to be real
+          cart,
+          shippingAddress,
+          undefined
+        );
+        //insert a processing order
+        const processingOneShippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const processingOneCart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        processingOrderOneDoc = await createOrder(
+          '123', //fake userID doesnt need to be real
+          processingOneCart,
+          processingOneShippingAddress,
+          undefined
+        );
+        //insert a proccessing order
+        const processingTwoShippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const processingTwoCart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        processingOrderTwoDoc = await createOrder(
+          '123', //fake userID doesnt need to be real
+          processingTwoCart,
+          processingTwoShippingAddress,
+          undefined
+        );
+
+        //update each order status
+        await supertest(app)
+          .put(`/api/admin/orders/${pendingOrderOneDoc._id.toString()}`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+          .send({
+            status: 'Pending'
+          })
+        await supertest(app)
+          .put(`/api/admin/orders/${processingOrderOneDoc._id.toString()}`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+          .send({
+            status: 'Processing'
+          });
+        await supertest(app)
+          .put(`/api/admin/orders/${processingOrderTwoDoc._id.toString()}`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+          .send({
+            status: 'Processing'
+          });
       });
       afterAll(async ()=>{
         await mongoose.connection.dropDatabase();
       });
       it('should return unauthorized if a jwt token was not provided', async()=>{
-        expect(true).toBe(false);
+        const response = await supertest(app)
+          .get('/api/admin/orders/processing')
+          .set({
+            'Authorization': `Bearer ${undefined}`
+          });
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
       it('should return unauthorized if the user is not an admin', async()=>{
-        expect(true).toBe(false);
+        const response = await supertest(app)
+          .get('/api/admin/orders/processing')
+          .set({
+            'Authorization': `Bearer ${createUserToken}`
+          });
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
-      it('should get all processing orders',()=>{
-        expect(true).toBe(false);
+      it('should get all processing orders',async()=>{
+        const response = await supertest(app)
+          .get('/api/admin/orders/processing')
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          });
+        expect(response.status).toBe(HttpStatusCodes.OK);
+        expect(response.body.orders.length).toBe(2);
+      });
+    });
+    describe('orders not found',()=>{
+      let createUserToken:string;
+      let createAdminToken:string;
+      let createUserDoc:User;
+      beforeAll(async()=>{
+        createUserToken = await createUserAccount();
+        createAdminToken = await createAdminAccount();
+        const response = await supertest(app)
+          .get('/api/users')
+          .set({
+            'Authorization': `Bearer ${createUserToken}`
+          });
+        createUserDoc = response.body.user;
+      });
+      afterAll(async()=>{
+        await mongoose.connection.dropDatabase();
+      });
+      it('should return not found if the user has not placed any orders',async()=>{
+        const response = await supertest(app)
+          .get(`/orders/users/${createUserDoc._id.toString()}`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
+      });
+      it('should return not found if no processing orders were found',async()=>{
+        const response = await supertest(app)
+          .get(`/orders/processing`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
+      });
+
+      it('should return not found if no pending orders were found', async()=>{
+        const response = await supertest(app)
+          .get(`/orders/pending`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
       });
     });
     describe('get all orders for provided user',()=>{
-      beforeAll(()=>{
+      let createUserToken:string;
+      let createAdminToken:string;
+      let createUserDoc:User;
+      beforeAll(async()=>{
         //create a user
+        createUserToken = await createUserAccount();
+        createAdminToken = await createAdminAccount();
+        const response = await supertest(app)
+          .get('/api/users')
+          .set({
+            'Authorization': `Bearer ${createUserToken}`
+          });
+        createUserDoc = response.body.user;
         //give the user 3 orders
+        //insert a pending order
+        const shippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const cart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        await createOrder(
+          createUserDoc._id.toString(),
+          cart,
+          shippingAddress,
+          undefined
+        );
+        //insert a processing order
+        const processingOneShippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const processingOneCart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        await createOrder(
+          createUserDoc._id.toString(),
+          processingOneCart,
+          processingOneShippingAddress,
+          undefined
+        );
+        //insert a proccessing order
+        const processingTwoShippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const processingTwoCart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        await createOrder(
+          createUserDoc._id.toString(),
+          processingTwoCart,
+          processingTwoShippingAddress,
+          undefined
+        );
       });
-      afterAll(()=>{
-        //delete the user
-        //delete the 3 orders
+      afterAll(async()=>{
+        await mongoose.connection.dropDatabase();
       })
       it('should return unauthorized if a jwt token was not provided', async()=>{
-        expect(true).toBe(false);
+        const response = await supertest(app)
+          .get('/api/admin/orders/users/testUserID')
+          .set({
+            'Authorization': `Bearer ${undefined}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
       it('should return unauthorized if the user is not an admin', async()=>{
-        expect(true).toBe(false);
+        const response = await supertest(app)
+          .get('/api/admin/orders/users/testUserID')
+          .set({
+            'Authorization': `Bearer ${createUserToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
-      it('should get all orders for a user',()=>{
-        expect(true).toBe(false);
+      it('should get all orders for a user',async()=>{
+        const response = await supertest(app)
+          .get(`/api/admin/orders/users/${createUserDoc._id.toString()}`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          });
+        expect(response.status).toBe(HttpStatusCodes.OK);
+        expect(response.body.orders.length).toBe(3);
+      });
+      it('should return not found if the user has no orders placed',async()=>{
+        const response = await supertest(app)
+          .get(`/api/admin/orders/123`)
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          })
+        expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
       });
     });
     describe('get all orders',()=>{
-      beforeAll(()=>{
+      let createAdminToken:string;
+      let createUserToken:string;
+      beforeAll( async ()=>{
         //create two users
-        //give each user the same 3 orders
+        createAdminToken = await createAdminAccount();
+        createUserToken = await createUserAccount();
+        //create 3 orders for the user
+        //insert a pending order
+        const shippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const cart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        await createOrder(
+          '123', //fake userID doesnt need to be real
+          cart,
+          shippingAddress,
+          undefined
+        );
+        //insert a processing order
+        const processingOneShippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const processingOneCart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        await createOrder(
+          '123', //fake userID doesnt need to be real
+          processingOneCart,
+          processingOneShippingAddress,
+          undefined
+        );
+        //insert a proccessing order
+        const processingTwoShippingAddress = {
+          line1: 'test',
+          city: 'test',
+          state: 'test',
+          postal_code: 'test',
+          country: 'test',
+          phone: '123-123-4567',
+          fullName: 'test test'
+        };
+        const processingTwoCart:CartInterface = {
+          items: [],
+          subtotalInDollars: 0,
+          taxInDollars: 0,
+          totalQuantity: 0,
+          promoCodeID: '',
+          discountAmountInDollars: 0,
+          finalPriceInDollars: 10,
+          desiredShipDate: new Date()
+        };
+        await createOrder(
+          '123', //fake userID doesnt need to be real
+          processingTwoCart,
+          processingTwoShippingAddress,
+          undefined
+        );
       });
+      afterAll(async()=>{
+        await mongoose.connection.dropDatabase();
+      })
       it('should return unauthorized if a jwt token was not provided', async()=>{
-        expect(true).toBe(false);
+        const response = await supertest(app)
+          .get('/api/admin/orders')
+          .set({
+            'Authorization': `Bearer ${undefined}`
+          });
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
       it('should return unauthorized if the user is not an admin', async()=>{
-        expect(true).toBe(false);
+        const response = await supertest(app)
+          .get('/api/admin/orders')
+          .set({
+            'Authorization': `Bearer ${createUserToken}`
+          });
+        expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
       });
-      it('should get all orders',()=>{
-        expect(true).toBe(false);
+      it('should get all orders',async()=>{
+        const response = await supertest(app)
+          .get('/api/admin/orders')
+          .set({
+            'Authorization': `Bearer ${createAdminToken}`
+          });
+        expect(response.status).toBe(HttpStatusCodes.OK);
+        expect(response.body.orders.length).toBe(3);
       });
     });
   });
