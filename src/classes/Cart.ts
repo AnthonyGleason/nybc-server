@@ -1,4 +1,6 @@
+import HttpStatusCodes from "@src/constants/HttpStatusCodes";
 import { getItemByID } from "@src/controllers/item";
+import { handleError } from "@src/helpers/error";
 import { BagelItem, CartItem, SpreadItem } from "@src/interfaces/interfaces";
 
 export default class Cart{
@@ -229,6 +231,8 @@ export default class Cart{
       } else if (itemDoc.cat==='spread'){
         const tempItemDoc:SpreadItem = itemDoc as SpreadItem;
         unitPrice = tempItemDoc.price;
+      }else{
+        throw new Error('The requested selection is invalid.');
       };
       this.items.push({
         itemData: itemDoc,

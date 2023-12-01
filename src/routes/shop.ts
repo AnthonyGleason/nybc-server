@@ -28,24 +28,28 @@ shopRouter.get('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
     req.payload.cartPayload.cart.finalPriceInDollars,
     req.payload.cartPayload.cart.desiredShipDate
   );
-  if (!cart.promoCodeID){
-    res.status(HttpStatusCodes.NOT_FOUND);
-  }else{
+  try{
+    if (!cart.promoCodeID) throw new Error("No promo code is currently applied to the users cart.");
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  };
+  try{
     //get promo code doc
     const promoDoc:PromoCode | null = await getPromoCodeByID(cart.promoCodeID);
-    if (promoDoc){
-      //get discount amount obtained by reversing the discount
-      const discountAmount:number = cart.discountAmountInDollars;
-      //get promo code input (name of code) for client
-      const promoCodeName:string = promoDoc.code;
-      //get is promo applied to cart bool
-      const isPromoApplied:boolean = true;
-      res.status(HttpStatusCodes.OK).json({
-        discountAmount: discountAmount,
-        isPromoApplied: isPromoApplied,
-        promoCodeName: promoCodeName
-      });
-    };
+    if (!promoDoc) throw new Error("No promo code doc was found for the applied promo code.");
+    //get discount amount obtained by reversing the discount
+    const discountAmount:number = cart.discountAmountInDollars;
+    //get promo code input (name of code) for client
+    const promoCodeName:string = promoDoc.code;
+    //get is promo applied to cart bool
+    const isPromoApplied:boolean = true;
+    res.status(HttpStatusCodes.OK).json({
+      discountAmount: discountAmount,
+      isPromoApplied: isPromoApplied,
+      promoCodeName: promoCodeName
+    });
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
 });
 
@@ -59,7 +63,7 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
     req.payload.cartPayload.cart.finalPriceInDollars,
     req.payload.cartPayload.cart.desiredShipDate
   );
-
+  
   const promoCodeInput:string = req.body.promoCodeInput;
   const paymentID = req.body.clientSecret.split('_secret_')[0];
   let paymentIntent:any = {};
@@ -68,6 +72,12 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
   let membershipDoc:Membership | null = null;
   let promoCodeDoc:PromoCode | null = null;
   
+  try{
+    if (!promoCodeInput || !paymentID) throw new Error('Required inputs were not provided in request.');
+  }catch(err){
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
+  };
+
   //attempt to get promocode doc and membership info for the current user
   try{
     [membershipDoc, promoCodeDoc] = await Promise.all([
@@ -79,7 +89,7 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
     if (!promoCodeDoc) throw new Error('The entered promo code does not exist.');
     
     try{
-      //ensure promo code is not expired
+      //ensure promo code is NOT expired
       if (promoCodeDoc.dateOfExpiry < new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))) throw new Error('The promo code is expired.');
       if (promoCodeDoc.totalAllowedUses && (promoCodeDoc.totalAllowedUses<promoCodeDoc.totalTimesUsed)) throw new Error('The promo code is out of uses.');
     }catch(err){
@@ -117,8 +127,10 @@ shopRouter.put('/promoCode',authenticateLoginToken,authenticateCartToken,async(r
       //store the new cart token
       let pendingOrderDoc:PendingOrder | null = await getPendingOrderDocByDocID(paymentIntent.metadata.pendingOrderID.toString());
       if (!pendingOrderDoc){
+        //a pending order does not exist create one
         pendingOrderDoc = await createPendingOrderDoc(tempCartToken,req.payload.loginPayload.user._id);
       }else{
+        //the pending order exists update it
         pendingOrderDoc.cartToken = tempCartToken;
         pendingOrderDoc = await updatePendingOrderDocByDocID(pendingOrderDoc._id as string,pendingOrderDoc);
       };
@@ -152,7 +164,12 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
 
   //get membership tier and apply membership discount
   const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
-
+  try{
+    if (!membershipDoc) throw new Error('A membership doc was not found for the user.');
+    if (cart.promoCodeID==='') throw new Error('No promo code is applied to the cart.');
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
+  };
   cart.discountAmountInDollars = 0;
   cart.promoCodeID = '';
   await cart.cleanupCart(membershipDoc?.tier || '');
@@ -193,23 +210,52 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
 
 //update the gift message
 shopRouter.put('/giftMessage', authenticateLoginToken, authenticateCartToken, async(req:any,res,next)=>{
-  const updatedGiftMessage:string = req.body.updatedGiftMessage;
-  //obtain the payment id from the first half of the clientSecret
-  let paymentID = req.body.clientSecret.split('_secret_')[0]; 
-  let paymentIntent:any = {};
-
   try{
-    if (!paymentIntent) throw new Error('There was an error obtaining the payment intent.');
-    // Update the PaymentIntent if one already exists for this cart.
+    const updatedGiftMessage:string = req.body.updatedGiftMessage;
+    if (!updatedGiftMessage || updatedGiftMessage==='') throw new Error('An updated gift message was not provided.');
+    //obtain the payment id from the first half of the clientSecret
+    let paymentID = req.body.clientSecret.split('_secret_')[0]; 
+    let paymentIntent:any = {};
+
+    try{
+      if (!paymentIntent) throw new Error('There was an error obtaining the payment intent.');
+      // Update the PaymentIntent if one already exists for this cart.
       paymentIntent = await stripe.paymentIntents.update(paymentID, {
         metadata: {
           giftMessage: updatedGiftMessage
         },
       });
+      res.status(HttpStatusCodes.OK).json({paymentIntentToken: paymentIntent.client_secret});
+    }catch(err){
+      handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
+    };
   }catch(err){
-    handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
-  res.status(HttpStatusCodes.OK).json({paymentIntentToken: paymentIntent.client_secret});
+});
+
+//add the users desired ship date to their cart
+shopRouter.put('/carts/shipDate',authenticateCartToken,handleCartLoginAuth,async (req:any,res,next)=>{
+  try{
+    if (!req.body.desiredShipDate) throw new Error("An ship date was not provided.");
+    const desiredShipDate:Date = new Date(req.body.desiredShipDate);
+    //get cart from payload
+    const cart:Cart = new Cart(
+      req.payload.cartPayload.cart.items,
+      req.payload.cartPayload.cart.subtotalInDollars,
+      req.payload.cartPayload.cart.taxInDollars,
+      req.payload.cartPayload.cart.promoCodeID,
+      req.payload.cartPayload.cart.discountAmountInDollars,
+      req.payload.cartPayload.cart.finalPriceInDollars,
+      desiredShipDate
+    );
+    //sign the new cart token
+    const newCartToken:string = issueCartJWTToken(cart);
+    //return it to the user
+    res.status(HttpStatusCodes.OK).json({'cartToken': newCartToken});
+  }catch(err){
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
+  };
 });
 
 // relevant documentation for the below webhook route, https://dashboard.stripe.com/webhooks/create?endpoint_location=local
@@ -317,12 +363,17 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
 
 shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCartLoginAuth, async (req:any,res,next)=>{
   let membershipDoc:Membership | null = null;
-  if (
-    req.payload.loginPayload &&
-    req.payload.loginPayload.user &&
-    req.payload.loginPayload.user._id
-  ){
-    membershipDoc = await getMembershipByUserID(req.payload.loginPayload.user._id);
+  try{
+    if (
+      req.payload.loginPayload &&
+      req.payload.loginPayload.user &&
+      req.payload.loginPayload.user._id
+    ){
+      membershipDoc = await getMembershipByUserID(req.payload.loginPayload.user._id);
+    };
+    if (!membershipDoc) throw new Error("A membership doc was not found for the user.");
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
@@ -333,7 +384,6 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
     req.payload.cartPayload.cart.finalPriceInDollars,
     req.payload.cartPayload.cart.desiredShipDate
   );
-
   if (membershipDoc){
     await cart.cleanupCart(membershipDoc.tier);
     const tempCartToken:string = issueCartJWTToken(cart);
@@ -597,48 +647,16 @@ shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any
     if (req.payload.loginPayload && req.payload.loginPayload.user._id){
       userDoc = await getUserByID(req.payload.loginPayload.user._id);
       if (!userDoc) throw new Error('An error has occured when fetching user data for the signed in user.');
-
       const membershipDoc: Membership | null = await getMembershipByUserID(userDoc._id as string);
       if (!membershipDoc) throw new Error('An error has occured when getting membership info for the signed in user.');
       membershipTier = membershipDoc.tier;
     };
-  }catch(err){
-    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
-  };
-
-  try{
-    //verify a cart was found (it doesn't matter if it is empty)
-    if (!cart) throw new Error('An error occured when obtaining cart data.');
-
     //cleanup cart
     await cart.cleanupCart(membershipTier);
-    
     res.status(HttpStatusCodes.OK).json({cart: req.payload.cartPayload.cart});
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
-});
-
-//add the users desired ship date to their cart
-shopRouter.put('/carts/shipDate',authenticateCartToken,handleCartLoginAuth,async (req:any,res,next)=>{
-  const desiredShipDate:Date = new Date(req.body.desiredShipDate);
-  
-  //get cart from payload
-  const cart:Cart = new Cart(
-    req.payload.cartPayload.cart.items,
-    req.payload.cartPayload.cart.subtotalInDollars,
-    req.payload.cartPayload.cart.taxInDollars,
-    req.payload.cartPayload.cart.promoCodeID,
-    req.payload.cartPayload.cart.discountAmountInDollars,
-    req.payload.cartPayload.cart.finalPriceInDollars,
-    desiredShipDate
-  );
-
-  //sign the new cart token
-  const newCartToken:string = issueCartJWTToken(cart);
-  
-  //return it to the user
-  res.status(HttpStatusCodes.OK).json({'cartToken': newCartToken});
 });
 
 //update a cart based on the provided bearer token
@@ -657,22 +675,28 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
     req.payload.cartPayload.cart.desiredShipDate
   );
 
-  //destructure the request body
+  // Destructure the request body
   const {
     selection,
     itemID,
     updatedQuantity
-  }:{
-    selection:string,
-    itemID:string,
-    updatedQuantity:number
+  }: {
+    selection: string;
+    itemID: string;
+    updatedQuantity: number;
   } = req.body;
-  
-  try{
-    if (!itemID || isNaN(updatedQuantity)) throw new Error('Required fields were not provided, or provided in an incorrect format.');
-    if (!cart) throw new Error('A cart is required but not provided.');
-  }catch(err){
-    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
+
+  try {
+    // Check for missing or incorrect fields
+    if (!itemID || typeof updatedQuantity !== 'number' || !selection || updatedQuantity<0) {
+      throw new Error('Required fields were not provided, or provided in an incorrect format.');
+    };
+    // Check if a cart is provided
+    if (!cart) {
+      throw new Error('A cart is required but not provided.');
+    };
+  } catch (err) {
+    handleError(res, HttpStatusCodes.BAD_REQUEST, err);
   };
 
   //the user is signed in and provided a login token (obtain user data)
@@ -693,15 +717,19 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
     //get item data from mongoDB
     const itemDoc:BagelItem | SpreadItem | null = await getItemByID(itemID);
     if (!itemDoc) throw new Error('An error has occured when retrieving item data.');
-
-    //handle invalid item quantity, if item quantity is less than 0 set it to 0
-    if (updatedQuantity<0){
-      cart.handleModifyCart(itemDoc,0,selection);
-    }else{
-      //handle modify cart
-      cart.handleModifyCart(itemDoc,updatedQuantity,selection);
+    
+    try{
+      //handle invalid item quantity, if item quantity is less than 0 set it to 0
+      if (updatedQuantity<0){
+        cart.handleModifyCart(itemDoc,0,selection);
+      }else{
+        //handle modify cart
+        cart.handleModifyCart(itemDoc,updatedQuantity,selection);
+      };
+    }catch(err){
+      handleError(res,HttpStatusCodes.NOT_MODIFIED,err);
     };
-
+    
     //cleanup cart
     await cart.cleanupCart(membershipTier);
     //update the promo code pricing if a code was used
@@ -712,9 +740,9 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
       //apply promo code
       cart.discountAmountInDollars = cart.calcPromoCodeDiscountAmount(promoCodeDoc?.perk || '');
     };
-
+    
     //invalidate the old cart token
-    invalidatedTokens.push(req.tokens.cartToken);
+    invalidatedTokens.push(req.tokens);
 
     //sign a new cart token for the user
     const token:string = issueCartJWTToken(cart);
@@ -733,7 +761,7 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
 shopRouter.get('/all', async (req,res,next)=>{
   try{
     const allItems:(BagelItem | SpreadItem)[] | null = await getAllItems();
-    if (!allItems) throw new Error('No shop items were found.');
+    if (!allItems || allItems.length===0) throw new Error('No shop items were found.');
     res.status(HttpStatusCodes.OK).json({allItems:allItems});
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
@@ -778,10 +806,11 @@ shopRouter.post('/orders/custom',async(req:any,res,next)=>{
 
   //send email to sales team
   const salesEmail:string = 'sales@nybagelsclub.com';
-  await transporter.sendMail(getCustomOrderMailOptions(salesEmail,requestInput,emailInput,quantityInput,requestsPackageDeal));
+  const response = await transporter.sendMail(getCustomOrderMailOptions(salesEmail,requestInput,emailInput,quantityInput,requestsPackageDeal));
   
-  //respond to client  *** needs an empty response body or the client doesn't properly recieve the response
-  res.status(HttpStatusCodes.OK).json({});
+  res.status(HttpStatusCodes.OK).json({
+    isEmailSent: response.accepted.length===1
+  });
 });
 
 //get order by order id (users)
@@ -811,7 +840,7 @@ shopRouter.get('/orders/', authenticateLoginToken, async (req:any,res,next)=>{
   const userID:string = req.payload.loginPayload.user._id;
   try{
     const orders:Order[] | null = await getAllOrdersByUserID(userID);
-    if (!orders) throw new Error('No orders were found for the provided user.');
+    if (!orders || orders.length===0) throw new Error('No orders were found for the provided user.');
     res.status(HttpStatusCodes.OK).json({orders: orders});
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
