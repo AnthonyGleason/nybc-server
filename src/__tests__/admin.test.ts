@@ -6,7 +6,7 @@ import { CartInterface, Order, PendingOrder, PromoCode, User } from '@src/interf
 import app from '@src/server';
 import mongoose from 'mongoose';
 import supertest from 'supertest';
-import { USER_EMAIL,USER_FIRST_NAME, USER_LAST_NAME, USER_PASS, USER_PASS_CONF, createAdminAccount, createUserAccount } from './accountCreation';
+import { USER_EMAIL,USER_FIRST_NAME, USER_LAST_NAME, USER_PASS, USER_PASS_CONF, createAdminAccount, createUserAccount } from './userTestsHelpers';
 import { createOrder } from '@src/controllers/order';
 import { createPromoCode } from '@src/controllers/promocode';
 

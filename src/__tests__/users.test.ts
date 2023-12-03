@@ -9,6 +9,11 @@ import { PasswordReset, User } from "@src/interfaces/interfaces";
 import { createPasswordReset, getPasswordResetByEmail } from "@src/controllers/passwordReset";
 import mongoose from "mongoose";
 
+
+
+// i am not 100% satisified with how this testing is done but it works.
+// we should rework this similarily to how shop is tested with helpers to clear bloat
+
 describe('users',()=>{
   //global declarations
   let createUserResponse:any;
@@ -126,8 +131,8 @@ describe('users',()=>{
         userData[field] = undefined;
   
         const response = await supertest(app)
-        .post('/api/users/register')
-        .send(userData);
+          .post('/api/users/register')
+          .send(userData);
         expect(response.status).toBe(HttpStatusCodes.BAD_REQUEST);
       }
     });

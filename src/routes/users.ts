@@ -30,7 +30,7 @@ usersRouter.get('/',authenticateLoginToken, async (req:any,res,next)=>{
     });
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
-  }
+  };
 });
 
 //register a new user

@@ -1,7 +1,8 @@
 import { salt } from "@src/constants/auth";
+import { createMembership } from "@src/controllers/membership";
 import { createNewUser } from "@src/controllers/user";
 import { issueUserJWTToken } from "@src/helpers/auth";
-import { User } from "@src/interfaces/interfaces";
+import { Membership, User } from "@src/interfaces/interfaces";
 import bcrypt from 'bcrypt';
 
 //create an admin account
@@ -44,3 +45,10 @@ export const createUserAccount = async function():Promise<string>{
   );
   return issueUserJWTToken(userAccountDoc);
 }
+
+export const createMemberShipDocForUser = async function(userID:string){
+  return await createMembership(
+    userID,
+    undefined
+  );
+};

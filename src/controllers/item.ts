@@ -38,6 +38,12 @@ export const createSpreadItem = async function(
   });
 };
 
+export const insertManyStoreItems = async function(
+  storeItems:any[]
+){
+  return await ItemModel.insertMany(storeItems);
+};
+
 //get all items
 export const getAllItems = async function():Promise<(BagelItem | SpreadItem)[] | null>{
   return await ItemModel.find({});

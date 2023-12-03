@@ -9,7 +9,8 @@ export const createPromoCode = async function(
   description:string,
   perk:string,
   totalAllowedUses?:number,
-  disabled?:boolean
+  disabled?:boolean,
+  totalTimesUsed?:number
 ){
   return await PromoCodeModel.create({
     code:code,
@@ -18,7 +19,8 @@ export const createPromoCode = async function(
     description: description,
     perk: perk,
     totalAllowedUses: totalAllowedUses || undefined,
-    disabled: disabled || true
+    disabled: disabled || true,
+    totalTimesUsed: totalTimesUsed || 0
   })
 };
 

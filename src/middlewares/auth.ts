@@ -67,7 +67,7 @@ export const authenticateCartToken = function(req:any,res:any,next:any){
   const cartTokenHeader:string | undefined = req.headers['cart-token'];
   const cartToken = cartTokenHeader && cartTokenHeader.split(' ')[1];
    //handle token does not exist or token is revoked
-   if (! cartToken || invalidatedTokens.includes( cartToken)) {
+   if (!cartToken || invalidatedTokens.includes( cartToken)) {
     return res.status(401).json({ 
       isValid: false,
       message: 'Unauthorized',

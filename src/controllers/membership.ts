@@ -2,13 +2,13 @@ import { Membership } from "@src/interfaces/interfaces";
 import { MembershipModel } from "@src/models/Membership";
 
 //create a membership for userID
-export const createMembership = async function(userID:string,renewalDate?:Date){
-  let membershipObj = {
-    userID: userID,
-    renewalDate: renewalDate || undefined
-  };
+export const createMembership = async function(userID:string,renewalDate?:Date,tier?:string){
   
-  return await MembershipModel.create(membershipObj);
+  return await MembershipModel.create({
+    userID: userID,
+    renewalDate: renewalDate || undefined,
+    tier: tier || undefined
+  }); 
 };
 
 //get a membership by membershipID

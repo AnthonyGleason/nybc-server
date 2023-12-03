@@ -159,9 +159,14 @@ shopRouter.delete('/promoCode',authenticateLoginToken,authenticateCartToken,asyn
     req.payload.cartPayload.cart.finalPriceInDollars,
     req.payload.cartPayload.cart.desiredShipDate
   );
-  let paymentID = req.body.clientSecret.split('_secret_')[0]; 
+  let paymentID = ''; 
   let paymentIntent:any = {};
-
+  try{
+    if (!req.body.clientSecret) throw new Error('A client secret was not provided.');
+    paymentID = req.body.clientSecret.split('_secret_')[0];
+  }catch(err){
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
+  };
   //get membership tier and apply membership discount
   const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
   try{
