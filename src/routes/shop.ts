@@ -604,6 +604,9 @@ shopRouter.post('/carts/create-checkout-session',authenticateCartToken,authentic
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
     //create session
     const session = await stripe.checkout.sessions.create({
+      automatic_tax:{
+        'enabled': true
+      },
       metadata:{
         'pendingOrderID': pendingOrderDoc._id.toString()
       },
@@ -615,6 +618,21 @@ shopRouter.post('/carts/create-checkout-session',authenticateCartToken,authentic
       },
       mode: "payment",
       allow_promotion_codes: true,
+      shipping_address_collection:{
+        allowed_countries: ['US']
+      },
+      shipping_options: [
+        {
+          shipping_rate_data: {
+            type: 'fixed_amount',
+            fixed_amount: {
+              amount: 0,
+              currency: 'usd',
+            },
+            display_name: 'Free USPS Priority Mail Shipping',
+          },
+        }
+      ],
       line_items: cart.items.map(item => {
         return {
           price_data: {
