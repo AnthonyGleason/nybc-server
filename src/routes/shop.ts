@@ -281,6 +281,7 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
   };
   
   try{
+    console.log('event',event.data.object);
     //ensure the payment intent is the correct type
     const paymentIntentSucceeded = event.data.object;
     if (event.type!=='payment_intent.succeeded') throw new Error('This route only handles succeeded payments.');
