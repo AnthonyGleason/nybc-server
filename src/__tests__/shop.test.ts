@@ -5,24 +5,13 @@ import app from "@src/server";
 import HttpStatusCodes from "@src/constants/HttpStatusCodes";
 import { BagelItem, Order, PendingOrder, PromoCode, SpreadItem } from "@src/interfaces/interfaces";
 import { getPendingOrderDocByCartToken } from "@src/controllers/pendingOrder";
+import { deleteMembershipByUserID } from "@src/controllers/membership";
+import { createTestAccount } from "nodemailer";
 
+//todo:
 //add price and variable verification where applicable (ensure fields are still the same)
-
+//add an admin route for getting payment intent data and then request and verify those fields are correct
 describe("shop",()=>{
-  describe("checkout",()=>{
-    describe("checkout cart",()=>{
-
-    });
-    describe("receive placed order webhook from stripe",()=>{
-
-    });
-    describe("create a tax calculation for a cart",()=>{
-
-    });
-    describe("get a payment intent from stripe",()=>{
-
-    });
-  });
   describe("cart",()=>{
     describe("handle promo code",()=>{
       describe("get current cart promo code data",()=>{
@@ -367,9 +356,15 @@ describe("shop",()=>{
         let promoCodeDoc:PromoCode;
         let storeItems;
         let paymentIntentSecret:string = '';
+        ////////////////
+        let secondCartToken:string = '';
+        let secondPaymentIntentSecret:string = '';
+        let createSecondUserResponse: TestCreateUserRes;
         beforeAll(async()=>{
           //create the user
           createUserResponse = await createUser(false,false,'Non-Member','test@nybagelsclub.com');
+          //create the second user
+          createSecondUserResponse = await createUser(false,false,'Non-Member','test123@nybagelsclub.com');
           //add store items
           storeItems = await createTestStoreItems();
           //create a cart with items
@@ -393,8 +388,17 @@ describe("shop",()=>{
             paymentIntentSecret
           );
           //create a second cart
+          secondCartToken = await createPopulatedCart(
+            createUserResponse.userToken,
+            [{
+              selection: 'dozen', //may need to change this if you adjust the order of store items added, a permenant fix could be to filter the array
+              itemID: storeItems[0]._id.toString(),
+              updatedQuantity: 2
+            }]
+          );
           //create the payment intent for the second cart
-        });
+          secondPaymentIntentSecret = await createTestingPaymentIntent(createUserResponse.userToken,secondCartToken);      
+        },10000);
         afterAll(async()=>{
           await mongoose.connection.dropDatabase();
         });
@@ -437,12 +441,32 @@ describe("shop",()=>{
             });
           expect(response.status).toBe(HttpStatusCodes.FORBIDDEN);
         });
-        it('should return not found if no membership doc was found',async()=>{
-          expect(true).toBe(false);
+        it('should return not found if a promo code is not applied to the users cart',async()=>{
+          const response = await supertest(app)
+            .delete('/api/shop/promoCode')
+            .set({
+              'Authorization': `Bearer ${createSecondUserResponse.userToken}`,
+              'cart-token': `Bearer ${secondCartToken}`
+            })
+            .send({
+              'clientSecret': `Bearer ${paymentIntentSecret}`
+            })
+          expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
         });
-        it('should return an error if a promo code is not applied to the users cart',async()=>{
-          //see beforeAll currently working on this
-          expect(true).toBe(false);
+        //ensure the below test is run after "should return not found if a promo code is not applied to the users cart", the below test modifies the user and could cause conflicts due to non test isolation
+        it('should return not found if no membership doc was found',async()=>{
+          //delete the membership doc for the user
+          await deleteMembershipByUserID(createSecondUserResponse.userID.toString());
+          const response = await supertest(app)
+            .delete('/api/shop/promoCode')
+            .set({
+              'Authorization': `Bearer ${createSecondUserResponse.userToken}`,
+              'cart-token': `Bearer ${secondCartToken}`
+            })
+            .send({
+              'clientSecret': `Bearer ${paymentIntentSecret}`
+            });
+          expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
         });
         //the below test modifies the scoped cartToken ensure this is last
         it('should correctly remove the promo code from cart',async()=>{
@@ -473,93 +497,321 @@ describe("shop",()=>{
     });
     describe('cart interactions',()=>{
       describe("add the desired ship date to cart",()=>{
-        it('should return unauthorized if no cart token was provided',()=>{
-
+        let cartToken = '';
+        beforeAll(async()=>{
+          //create empty cart
+          cartToken = await createEmptyCart();
         });
-        it('should return forbidden if a cart token was provided but incorrect',()=>{
-          
+        afterAll(async()=>{
+          await mongoose.connection.dropDatabase();
         });
-        it('should return bad request if a ship date was not provided.',()=>{
-
+        it('should return unauthorized if no cart token was provided',async()=>{
+          const response = await supertest(app)
+            .put('/api/shop/carts/shipDate')
+            .set({
+              'cart-token': `Bearer `
+            })
+          expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
         });
-        it('should update the cart with the desired ship date if no login token was provided',()=>{
-
+        it('should return forbidden if a cart token was provided but incorrect',async()=>{
+          const response = await supertest(app)
+            .put('/api/shop/carts/shipDate')
+            .set({
+              'cart-token': `Bearer 123`
+            })
+          expect(response.status).toBe(HttpStatusCodes.FORBIDDEN);
         });
-        it('should update the cart with the desired ship date if a login token was provided',()=>{
+        it('should return bad request if a ship date was not provided.',async()=>{
+          const response = await supertest(app)
+            .put('/api/shop/carts/shipDate')
+            .set({
+              'cart-token': `Bearer ${cartToken}`
+            })
+            .send({
+              'desiredShipDate': ''
+            });
+          expect(response.status).toBe(HttpStatusCodes.BAD_REQUEST);
+        });
+        it('should update the cart with the desired ship date even if no login token was provided',async()=>{
+          const date:Date = new Date();
+          const response = await supertest(app)
+            .put('/api/shop/carts/shipDate')
+            .set({
+              'cart-token': `Bearer ${cartToken}`
+            })
+            .send({
+              'desiredShipDate': date
+            });
+          expect(response.status).toBe(HttpStatusCodes.OK);
+          expect(response.body.cartToken).toBeDefined();
 
+          const cartRes = await supertest(app)
+            .get('/api/shop/carts/verify')
+            .set({
+              'cart-token': `Bearer ${response.body.cartToken}`
+            })
+          expect(cartRes.status).toBe(HttpStatusCodes.OK);
+          expect(new Date(cartRes.body.cart.desiredShipDate).toString()).toBe(date.toString());
         });
       });
       describe("update the gift message field in the cart",()=>{
-        it('should return bad request if a gift message was not provided',()=>{
-
+        let createUserResponse: TestCreateUserRes;
+        let cartToken:string = '';
+        let storeItems;
+        let paymentIntentSecret:string;
+        beforeAll(async()=>{
+          //create the user
+          createUserResponse = await createUser(false,false,'Non-Member','test@nybagelsclub.com');
+          //add store items
+          storeItems = await createTestStoreItems();
+          //create a cart with items
+          cartToken = await createPopulatedCart(
+            createUserResponse.userToken,
+            [{
+              selection: 'dozen', //may need to change this if you adjust the order of store items added, a permenant fix could be to filter the array
+              itemID: storeItems[0]._id.toString(),
+              updatedQuantity: 2
+            }]
+          );
+          //create a payment intent
+          paymentIntentSecret = await createTestingPaymentIntent(createUserResponse.userToken,cartToken);
+        },10000);
+        afterAll(async()=>{
+          await mongoose.connection.dropDatabase();
         });
-        it('should return unauthorized if no login token was provided',()=>{
-
+        it('should return bad request if a gift message was not provided',async()=>{
+          const response = await supertest(app)
+            .put('/api/shop/giftMessage')
+            .set({
+              'Authorization': `Bearer ${createUserResponse.userToken}`,
+              'cart-token': `Bearer ${cartToken}`
+            })
+            .send({
+              'updatedGiftMessage': '',
+              'clientSecret': paymentIntentSecret
+            });
+          expect(response.status).toBe(HttpStatusCodes.BAD_REQUEST);
         });
-        it('should return unauthorized if no cart token was provided',()=>{
-
+        it('should return bad request if a client secret was not provided',async()=>{
+          const response = await supertest(app)
+            .put('/api/shop/giftMessage')
+            .set({
+              'Authorization': `Bearer ${createUserResponse.userToken}`,
+              'cart-token': `Bearer ${cartToken}`
+            })
+            .send({
+              'updatedGiftMessage': '123',
+              'clientSecret': ''
+            });
+          expect(response.status).toBe(HttpStatusCodes.BAD_REQUEST);
         });
-        it('should return forbidden if a cart token was provided but incorrect',()=>{
-          
+        it('should return unauthorized if no login token was provided',async()=>{
+          const response = await supertest(app)
+            .put('/api/shop/giftMessage')
+            .set({
+              'Authorization': `Bearer `,
+              'cart-token': `Bearer ${cartToken}`
+            })
+            .send({
+              'updatedGiftMessage': '123',
+              'clientSecret': paymentIntentSecret
+            });
+          expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
         });
-        it('should update the gift message for a users cart',()=>{
+        it('should return unauthorized if no cart token was provided',async()=>{
+          const response = await supertest(app)
+            .put('/api/shop/giftMessage')
+            .set({
+              'Authorization': `Bearer ${createUserResponse.userToken}`,
+              'cart-token': `Bearer `
+            })
+            .send({
+              'updatedGiftMessage': '123',
+              'clientSecret': paymentIntentSecret
+            });
+          expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
+        });
+        it('should return forbidden if a cart token was provided but incorrect',async()=>{
+          const response = await supertest(app)
+            .put('/api/shop/giftMessage')
+            .set({
+              'Authorization': `Bearer ${createUserResponse.userToken}`,
+              'cart-token': `Bearer 123`
+            })
+            .send({
+              'updatedGiftMessage': '123',
+              'clientSecret': paymentIntentSecret
+            });
+          expect(response.status).toBe(HttpStatusCodes.FORBIDDEN);
+        });
+        it('should update the gift message for a users cart',async()=>{
+          const giftMessage:string = 'testMessage';
 
+          const response = await supertest(app)
+            .put('/api/shop/giftMessage')
+            .set({
+              'Authorization': `Bearer ${createUserResponse.userToken}`,
+              'cart-token': `Bearer ${cartToken}`
+            })
+            .send({
+              'updatedGiftMessage': giftMessage,
+              'clientSecret': paymentIntentSecret
+            });
+          expect(response.status).toBe(HttpStatusCodes.OK);
         });
       });
       describe("apply the users membership pricing to cart",()=>{
-        it('should return not found if a membership doc does not exist for the user',()=>{
-
+        let userWithNoMembershipRes:TestCreateUserRes;
+        let userWithNoMembershipCartToken:string = '';
+        let userWithExpiredMembershipRes:TestCreateUserRes;
+        let cartToken:string = '';
+        let nonLoggedInCartToken:string = '';
+        let storeItems:any;
+        let diamondMemberUserRes:TestCreateUserRes;
+        let diamondMemberCartToken:string = '';
+        beforeAll(async()=>{
+          diamondMemberUserRes = await createUser(false,false,'Diamond Member','test2@nybagelsclub.com');
+          //add store items
+          storeItems = await createTestStoreItems();
+          //create a user
+          userWithNoMembershipRes = await createUser(false,false,'Non-Member','test1@nybagelsclub.com');
+          userWithNoMembershipCartToken = await createPopulatedCart(userWithNoMembershipRes.userToken,[{
+            selection: 'dozen', //may need to change this if you adjust the order of store items added, a permenant fix could be to filter the array
+            itemID: storeItems[0]._id.toString(),
+            updatedQuantity: 2
+          }]);
+          cartToken = await createPopulatedCart(userWithNoMembershipRes.userToken,[{
+            selection: 'dozen', //may need to change this if you adjust the order of store items added, a permenant fix could be to filter the array
+            itemID: storeItems[0]._id.toString(),
+            updatedQuantity: 2
+          }]);
+          nonLoggedInCartToken = await createPopulatedCart(userWithNoMembershipRes.userToken,[{
+            selection: 'dozen', //may need to change this if you adjust the order of store items added, a permenant fix could be to filter the array
+            itemID: storeItems[0]._id.toString(),
+            updatedQuantity: 2
+          }]);
+          diamondMemberCartToken = await createPopulatedCart(diamondMemberUserRes.userToken,[{
+            selection: 'dozen', //may need to change this if you adjust the order of store items added, a permenant fix could be to filter the array
+            itemID: storeItems[0]._id.toString(),
+            updatedQuantity: 2
+          }]);
+          userWithExpiredMembershipRes = await createUser(true,false,'Gold Member', 'test2938293@nybagelsclub.com');
+          //delete the users membership doc last so it doesnt effect other user creation
+          await deleteMembershipByUserID(userWithNoMembershipRes.userID.toString());
+        },10000);
+        afterAll(async()=>{
+          await mongoose.connection.dropDatabase();
         });
-        it('should return unauthorized if no login token was provided',()=>{
-
+        it('should return not found if a membership doc does not exist for the user',async()=>{
+          const response = await supertest(app)
+            .post('/api/shop/carts/applyMembershipPricing')
+            .set({
+              'Authorization': `Bearer ${userWithNoMembershipRes.userToken}`,
+              'cart-token': `Bearer ${userWithNoMembershipCartToken}`
+            });
+          expect(response.status).toBe(HttpStatusCodes.NOT_FOUND);
         });
-        it('should return unauthorized if no cart token was provided',()=>{
-
+        it('should return forbidden if the users membership is expired',async()=>{
+          const response = await supertest(app)
+            .post('/api/shop/carts/applyMembershipPricing')
+            .set({
+              'Authorization': `Bearer ${userWithExpiredMembershipRes.userToken}`,
+              'cart-token': `Bearer ${cartToken}`
+            });
+          expect(response.status).toBe(HttpStatusCodes.FORBIDDEN);
         });
-        it('should return forbidden if a cart token was provided but incorrect',()=>{
-          
+        it('should return unauthorized if no cart token was provided',async()=>{
+          const response = await supertest(app)
+            .post('/api/shop/carts/applyMembershipPricing')
+            .set({
+              'Authorization': `Bearer ${diamondMemberUserRes.userToken}`,
+              'cart-token': `Bearer `
+            });
+          expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
         });
-        it('should apply non member pricing if the user is not logged in',()=>{
-
+        it('should return forbidden if a cart token was provided but incorrect',async()=>{
+          const response = await supertest(app)
+            .post('/api/shop/carts/applyMembershipPricing')
+            .set({
+              'Authorization': `Bearer ${diamondMemberUserRes.userToken}`,
+              'cart-token': `Bearer 123`
+            });
+          expect(response.status).toBe(HttpStatusCodes.FORBIDDEN);
         });
-        it('should apply non member pricing if the user does not have a membership doc',()=>{
-
+        it('should apply non member pricing if the user is not logged in',async()=>{
+          const response = await supertest(app)
+            .post('/api/shop/carts/applyMembershipPricing')
+            .set({
+              'cart-token': `Bearer ${nonLoggedInCartToken}`
+            });
+          expect(response.status).toBe(HttpStatusCodes.OK);
+          expect(response.body.cart.subtotalInDollars).toBe(89.9);
+          expect(response.body.cart.finalPriceInDollars).toBe(89.9);
+          expect(response.body.cart.totalQuantity).toBe(2);
+          expect(response.body.cart.discountAmountInDollars).toBe(0);
         });
-        it('should correctly apply a users membership tier pricing to cart',()=>{
-
-        });
-        it('should correctly apply membership pricing to cart',()=>{
-
+        it('should correctly apply membership pricing to cart',async()=>{
+          const response = await supertest(app)
+            .post('/api/shop/carts/applyMembershipPricing')
+            .set({
+              'Authorization': `Bearer ${diamondMemberUserRes.userToken}`,
+              'cart-token': `Bearer ${cartToken}`
+            });
+          expect(response.status).toBe(HttpStatusCodes.OK);
+          expect(response.body.cartToken).toBeDefined();
+          expect(response.body.cart.totalQuantity).toBe(2);
+          expect(response.body.cart.finalPriceInDollars).toBe(76.415);
         });
       });
     });
     describe('cart data handling',()=>{
       describe('verify a cart token',()=>{
-        it('should return unauthorized if no cart token was provided',()=>{
+        let createUserResponse: TestCreateUserRes;
+        let cartToken:string = '';
+        let storeItems;
 
+        beforeAll(async()=>{
+          //create the user
+          createUserResponse = await createUser(false,false,'Non-Member','test@nybagelsclub.com');
+          //add store items
+          storeItems = await createTestStoreItems();
+          //create a cart with items
+          cartToken = await createPopulatedCart(
+            createUserResponse.userToken,
+            [{
+              selection: 'dozen', //may need to change this if you adjust the order of store items added, a permenant fix could be to filter the array
+              itemID: storeItems[0]._id.toString(),
+              updatedQuantity: 2
+            }]
+          );
         });
-        it('should return forbidden if a cart token was provided but incorrect',()=>{
-          
+        afterAll(async()=>{
+          await mongoose.connection.dropDatabase();
         });
-        it('should return the cart if the cart token is valid',()=>{
-
+        it('should return unauthorized if no cart token was provided',async()=>{
+          const response = await supertest(app)
+            .get('/api/shop/carts/verify')
+            .set({
+              'cart-token': `Bearer `
+            })
+          expect(response.status).toBe(HttpStatusCodes.UNAUTHORIZED);
         });
-      });
-      describe('get the cart data for provided token',()=>{
-        it('should return unauthorized if no cart token was provided',()=>{
-
+        it('should return forbidden if a cart token was provided but incorrect',async()=>{
+          const response = await supertest(app)
+            .get('/api/shop/carts/verify')
+            .set({
+              'cart-token': `Bearer 123`
+            })
+          expect(response.status).toBe(HttpStatusCodes.FORBIDDEN);
         });
-        it('should return forbidden if a cart token was provided but incorrect',()=>{
-          
-        });
-        it('should return not found if a user doc was not found',()=>{
-
-        });
-        it('should return not found if a membership doc was not found',()=>{
-
-        });
-        it('should get the correct cart data for the provided cart token',()=>{
-
+        it('should return the cart if the cart token is valid',async()=>{
+          const response = await supertest(app)
+            .get('/api/shop/carts/verify')
+            .set({
+              'cart-token': `Bearer ${cartToken}`
+            })
+          expect(response.status).toBe(HttpStatusCodes.OK);
+          expect(response.body.cart).toBeDefined();
         });
       });
       describe('create an empty cart',()=>{
@@ -700,14 +952,15 @@ describe("shop",()=>{
           let storeItems:any;
           let diamondMemberCartToken:string = '';
           let diamondMemberUserRes:TestCreateUserRes;
-
+          let promoCodeDoc:PromoCode;
           beforeAll(async()=>{
             nonMemberCartToken = await createEmptyCart();
             nonMemberUserRes = await createUser(false,false,'Non-Member','test@nybagelsclub.com')
             storeItems = await createTestStoreItems();
             diamondMemberCartToken = await createEmptyCart();
             diamondMemberUserRes = await createUser(false,false,'Diamond Member','test2@nybagelsclub.com')
-          });
+            promoCodeDoc = await createPromoCodeDoc(false,false,'test15','15_PERCENT_OFF');
+          },10000);
           afterAll(async()=>{
             await mongoose.connection.dropDatabase();
           });
@@ -734,6 +987,30 @@ describe("shop",()=>{
             expect(verifyCartResponse.status).toBe(HttpStatusCodes.OK);
             expect(verifyCartResponse.body.cart.items[0].quantity).toBe(2); //quantity requested above
           });
+          //to save on processing power the following test updates the quantity of the item added in the above test
+          it('should correctly update the quantity of a item already in the cart',async()=>{
+            const response = await supertest(app)
+              .put('/api/shop/carts')
+              .set({
+                'cart-token': `Bearer ${nonMemberCartToken}`,
+                'Authorization': `Bearer ${nonMemberUserRes.userToken}`
+              })
+              .send({
+                selection: 'dozen',
+                itemID: storeItems[0]._id.toString(),
+                updatedQuantity: 4
+              });
+            expect(response.status).toBe(HttpStatusCodes.OK);
+            expect(response.body.cartToken).not.toBe(nonMemberCartToken);
+            // should correctly provide a cart token for the updated cart
+            const verifyCartResponse = await supertest(app)
+              .get('/api/shop/carts/verify')
+              .set({
+                'cart-token': `Bearer ${response.body.cartToken}`
+              });
+            expect(verifyCartResponse.status).toBe(HttpStatusCodes.OK);
+            expect(verifyCartResponse.body.cart.items[0].quantity).toBe(4); //quantity requested above
+          });
           it('should correctly apply the users membership discount',async()=>{
             const response = await supertest(app)
               .put('/api/shop/carts')
@@ -748,15 +1025,31 @@ describe("shop",()=>{
               });
             expect(response.status).toBe(HttpStatusCodes.OK);
             expect(response.body.cart.finalPriceInDollars).toBe(38.2075);
+            //update the cart token for the following test
+            diamondMemberCartToken = response.body.cartToken;
           });
-          it('should correctly apply promo pricing',async()=>{
-            expect(true).toBe(false);
-          });
+          //relies on the updated cart token in the above test (i know it can be isolated but again we are saving on computing resources)
           it('should correctly apply membership and promo pricing at the same time',async()=>{
-            expect(true).toBe(false);
-          });
-          it('should correctly update the quantity of a item already in the cart',async()=>{
-            expect(true).toBe(false);
+            const paymentIntent = await createTestingPaymentIntent(diamondMemberUserRes.userToken,diamondMemberCartToken);
+            //apply promo to cart
+            diamondMemberCartToken = await applyPromoCodeToCart(promoCodeDoc.code,diamondMemberCartToken,diamondMemberUserRes.userToken,paymentIntent)
+            const response = await supertest(app)
+              .put('/api/shop/carts')
+              .set({
+                'cart-token': `Bearer ${diamondMemberCartToken}`,
+                'Authorization': `Bearer ${diamondMemberUserRes.userToken}`
+              })
+              .send({
+                selection: 'dozen',
+                itemID: storeItems[0]._id.toString(),
+                updatedQuantity: 1
+              });
+            expect(response.status).toBe(HttpStatusCodes.OK);
+            expect(response.body.cart.finalPriceInDollars).toBeCloseTo(32.476);
+            //the below line verifies the discount amount was correctly applied
+            expect(response.body.cart.discountAmountInDollars).toBeCloseTo(5.731);
+            expect(response.body.cart.subtotalInDollars).toBe(38.2075);
+            expect(response.body.cart.promoCodeID).toBe(promoCodeDoc._id.toString());
           });
         });
       });
@@ -833,8 +1126,6 @@ describe("shop",()=>{
             'quantityInput': '0',
             'requestsPackageDeal': true
           });
-
-        console.log(response);
         expect(response.status).toBe(HttpStatusCodes.OK);
         expect(response.body.isEmailSent).toBe(true);
       });

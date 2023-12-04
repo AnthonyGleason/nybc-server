@@ -218,6 +218,7 @@ shopRouter.put('/giftMessage', authenticateLoginToken, authenticateCartToken, as
   try{
     const updatedGiftMessage:string = req.body.updatedGiftMessage;
     if (!updatedGiftMessage || updatedGiftMessage==='') throw new Error('An updated gift message was not provided.');
+    if (!req.body.clientSecret) throw new Error('A payment intent (client secret) was not provided.');
     //obtain the payment id from the first half of the clientSecret
     let paymentID = req.body.clientSecret.split('_secret_')[0]; 
     let paymentIntent:any = {};
@@ -230,7 +231,9 @@ shopRouter.put('/giftMessage', authenticateLoginToken, authenticateCartToken, as
           giftMessage: updatedGiftMessage
         },
       });
-      res.status(HttpStatusCodes.OK).json({paymentIntentToken: paymentIntent.client_secret});
+      res.status(HttpStatusCodes.OK).json({
+        paymentIntentToken: paymentIntent.client_secret
+      });
     }catch(err){
       handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
     };
@@ -376,7 +379,9 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
     ){
       membershipDoc = await getMembershipByUserID(req.payload.loginPayload.user._id);
     };
-    if (!membershipDoc) throw new Error("A membership doc was not found for the user.");
+    //handle user is signed in and no membership doc is present.
+    //if the user is not signed in we will apply non member pricing later
+    if (req.tokens.login && !membershipDoc) throw new Error("A membership doc was not found for the user.");
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };
@@ -391,6 +396,11 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
   );
   if (membershipDoc){
     await cart.cleanupCart(membershipDoc.tier);
+    try{
+      if (membershipDoc.renewalDate && membershipDoc.renewalDate<new Date()) throw new Error('Your membership has expired.');
+    }catch(err){
+      handleError(res,HttpStatusCodes.FORBIDDEN,err);
+    };
     const tempCartToken:string = issueCartJWTToken(cart);
     res.status(HttpStatusCodes.OK).json({
       cartToken: tempCartToken,
