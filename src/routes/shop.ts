@@ -15,6 +15,7 @@ import { getPromoCodeByCode, getPromoCodeByID, updatePromoCodeByID } from '@src/
 import { createPendingOrderDoc, deletePendingOrderDocByCartToken, getPendingOrderDocByCartToken, getPendingOrderDocByDocID, updatePendingOrderDocByDocID } from '@src/controllers/pendingOrder';
 import { getCustomOrderMailOptions, getOrderPlacedMailOptions } from '@src/constants/emails';
 import { transporter } from "@src/server";
+import { getSelectionName } from '@src/helpers/shop';
 
 export const shopRouter = Router();
 
@@ -557,7 +558,7 @@ shopRouter.post('/carts/create-tax-calculation',authenticateLoginToken,authentic
   });
 });
 
-shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticateLoginToken,async (req:any,res,next)=>{
+shopRouter.post('/carts/create-checkout-session',authenticateCartToken,authenticateLoginToken,async (req:any,res,next)=>{
   let membershipTier:string = 'Non-Member';
   let cart:Cart | null = null;
 
@@ -601,20 +602,38 @@ shopRouter.post('/carts/create-payment-intent',authenticateCartToken,authenticat
   try{
     if (!pendingOrderDoc) throw new Error('A pending order doc was not found!');
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
-    const finalPriceInCents:number = Math.floor(cart.finalPriceInDollars * 100);
-    //create payment intent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: finalPriceInCents,
-      currency: 'usd', // Change this to your preferred currency
+    //create session
+    const session = await stripe.checkout.sessions.create({
       metadata:{
-        userID: req.payload.loginPayload.user._id,
-        pendingOrderID: pendingOrderDoc._id.toString()
-      }
-    });
+        'pendingOrderID': pendingOrderDoc._id.toString()
+      },
+      payment_method_types: [
+        'card',
+      ],
+      "phone_number_collection": {
+        "enabled": true
+      },
+      mode: "payment",
+      line_items: cart.items.map(item => {
+        return {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `${item.itemData.name} ${getSelectionName(item)}`,
+            },
+            unit_amount: Math.ceil(item.unitPriceInDollars * 100), //round down to the nearest whole integer (stripe wont accept decimal prices)
+          },
+          quantity: item.quantity,
+        }
+      }),
+      success_url: `https://www.nybagelsclub.com/#/checkout/success`,
+      cancel_url: `https://www.nybagelsclub.com/#/cart`,
+    })
     //verify a payment intent was successfully created
-    if (!paymentIntent) throw new Error('An error occured when creating a payment intent.');
-    res.status(HttpStatusCodes.OK).json({ paymentIntentToken: paymentIntent.client_secret });
+    if (!session) throw new Error('An error occured when creating a session.');
+    res.status(HttpStatusCodes.OK).json({sessionUrl: session.url});
   }catch(err){
+    console.log(err);
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
 });
