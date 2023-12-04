@@ -614,6 +614,7 @@ shopRouter.post('/carts/create-checkout-session',authenticateCartToken,authentic
         "enabled": true
       },
       mode: "payment",
+      allow_promotion_codes: true,
       line_items: cart.items.map(item => {
         return {
           price_data: {
