@@ -283,24 +283,23 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
   try{
     console.log('event', event);
     //ensure the event is the correct type
-    const checkoutSessionCompleted = event.data.object;
-    console.log('checkout-success', checkoutSessionCompleted);
+    const paymentIntentEventObj = event.data.object;
     if (event.type!=='checkout.session.completed') throw new Error('This route only handles checkout session succeess payments right now.');
 
     //get required properties to create the order doc from the payment intent
-    const userID:string = checkoutSessionCompleted.metadata.userID;
+    const userID:string = paymentIntentEventObj.metadata.userID;
     const shippingAddress:Address = {
-      line1: checkoutSessionCompleted.customer_details.address.line1,
-      line2: checkoutSessionCompleted.customer_details.address.line2 || undefined,
-      city: checkoutSessionCompleted.customer_details.address.city,
-      state: checkoutSessionCompleted.customer_details.address.state,
-      postal_code: checkoutSessionCompleted.customer_details.address.postal_code,
-      country: checkoutSessionCompleted.customer_details.address.country,
-      phone: checkoutSessionCompleted.customer_phone,
-      fullName: checkoutSessionCompleted.customer_details.name
+      line1: paymentIntentEventObj.shipping.address.line1,
+      line2: paymentIntentEventObj.shipping.address.line2 || undefined,
+      city: paymentIntentEventObj.shipping.address.city,
+      state: paymentIntentEventObj.shipping.address.state,
+      postal_code: paymentIntentEventObj.shipping.address.postal_code,
+      country: paymentIntentEventObj.shipping.address.country,
+      phone: paymentIntentEventObj.shipping.phone,
+      fullName: paymentIntentEventObj.shipping.name
     }; 
-    const giftMessage:string = checkoutSessionCompleted.metadata.giftMessage || '';
-    const pendingOrderDocID:string = checkoutSessionCompleted.metadata.pendingOrderID;
+    const giftMessage:string = paymentIntentEventObj.metadata.giftMessage || '';
+    const pendingOrderDocID:string = paymentIntentEventObj.metadata.pendingOrderID;
     //get pending order from mongoDB
     let pendingOrder:PendingOrder | null = await getPendingOrderDocByDocID(pendingOrderDocID);
     //validate all required fields were provided
@@ -318,15 +317,14 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
             message: 'Forbidden',
           });
         };
-        console.log(checkoutSessionCompleted);
         //MUST BE SET TO PAYLOAD.CART DO NOT USE REQ THIS IS HANDLED DIFFERENTLY THAN THE OTHERS!!!
         cart = new Cart(
           payload.cart.items,
-          checkoutSessionCompleted.amount_subtotal /100,
-          checkoutSessionCompleted.amount_total /100 - checkoutSessionCompleted.amount_subtotal /100,
+          payload.cart.subtotalInDollars,
+          (paymentIntentEventObj.amount_total /100) - payload.cart.subtotalInDollars,
           payload.cart.promoCodeID,
           payload.cart.discountAmountInDollars,
-          checkoutSessionCompleted.amount_total /100,
+          paymentIntentEventObj.amount_total /100,
           payload.cart.desiredShipDate
         );
         //we don't have a field for the total quantity calculations so we will calculate it here, we can just put this in the cart constructor
