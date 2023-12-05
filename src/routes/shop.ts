@@ -269,7 +269,7 @@ shopRouter.put('/carts/shipDate',authenticateCartToken,handleCartLoginAuth,async
 });
 
 // relevant documentation for the below webhook route, https://dashboard.stripe.com/webhooks/create?endpoint_location=local
-shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
+shopRouter.post('/stripe-webhook-checkout-session-success', async(req:any,res,next)=>{
   const sig = req.headers['stripe-signature'];
   const endpointSecret: string | undefined = isTestingModeEnabled ? process.env.STRIPE_TEST_SIGNING_SECRET : process.env.STRIPE_SIGNING_SECRET;
   let event;
