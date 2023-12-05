@@ -105,5 +105,6 @@ export interface PendingOrder{
   cartToken:string,
   userID:string,
   dateCreated: Date,
+  orderID?:string,
   _id: string | mongoose.Types.ObjectId //mongodb unique id
 };

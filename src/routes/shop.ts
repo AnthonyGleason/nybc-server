@@ -16,6 +16,7 @@ import { createPendingOrderDoc, deletePendingOrderDocByCartToken, getPendingOrde
 import { getCustomOrderMailOptions, getOrderPlacedMailOptions } from '@src/constants/emails';
 import { transporter } from "@src/server";
 import { getSelectionName } from '@src/helpers/shop';
+import { isTestingModeEnabled } from '@src/config/config';
 
 export const shopRouter = Router();
 
@@ -270,9 +271,8 @@ shopRouter.put('/carts/shipDate',authenticateCartToken,handleCartLoginAuth,async
 // relevant documentation for the below webhook route, https://dashboard.stripe.com/webhooks/create?endpoint_location=local
 shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
   const sig = req.headers['stripe-signature'];
-  const endpointSecret:string | undefined = process.env.STRIPE_SIGNING_SECRET;
+  const endpointSecret: string | undefined = isTestingModeEnabled ? process.env.STRIPE_TEST_SIGNING_SECRET : process.env.STRIPE_SIGNING_SECRET;
   let event;
-
   try {
     //catch any errors that occur when constructing the webhook event (such as wrong body format, too many characters etc...)
     event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret); //req.rawBody is assigned through middleware in server.js
@@ -281,29 +281,28 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
   };
   
   try{
-    console.log('event',event.data.object);
-    //ensure the payment intent is the correct type
-    const paymentIntentSucceeded = event.data.object;
-    if (event.type!=='payment_intent.succeeded') throw new Error('This route only handles succeeded payments.');
+    //ensure the event is the correct type
+    const checkoutSessionCompleted = event.data.object;
+    if (event.type!=='checkout.session.completed') throw new Error('This route only handles checkout session succeess payments right now.');
 
     //get required properties to create the order doc from the payment intent
-    const userID:string = paymentIntentSucceeded.metadata.userID;
+    const userID:string = checkoutSessionCompleted.metadata.userID;
     const shippingAddress:Address = {
-      line1: paymentIntentSucceeded.shipping.address.line1,
-      line2: paymentIntentSucceeded.shipping.address.line2 || undefined,
-      city: paymentIntentSucceeded.shipping.address.city,
-      state: paymentIntentSucceeded.shipping.address.state,
-      postal_code: paymentIntentSucceeded.shipping.address.postal_code,
-      country: paymentIntentSucceeded.shipping.address.country,
-      phone: paymentIntentSucceeded.metadata.customer_phone,
-      fullName: paymentIntentSucceeded.metadata.customer_fullName
+      line1: checkoutSessionCompleted.customer_details.address.line1,
+      line2: checkoutSessionCompleted.customer_details.address.line2 || undefined,
+      city: checkoutSessionCompleted.customer_details.address.city,
+      state: checkoutSessionCompleted.customer_details.address.state,
+      postal_code: checkoutSessionCompleted.customer_details.address.postal_code,
+      country: checkoutSessionCompleted.customer_details.address.country,
+      phone: checkoutSessionCompleted.customer_phone,
+      fullName: checkoutSessionCompleted.customer_details.name
     }; 
-    const giftMessage:string = paymentIntentSucceeded.metadata.giftMessage || '';
-    const pendingOrderDocID:string = paymentIntentSucceeded.metadata.pendingOrderID;
+    const giftMessage:string = checkoutSessionCompleted.metadata.giftMessage || '';
+    const pendingOrderDocID:string = checkoutSessionCompleted.metadata.pendingOrderID;
     //get pending order from mongoDB
     let pendingOrder:PendingOrder | null = await getPendingOrderDocByDocID(pendingOrderDocID);
     //validate all required fields were provided
-    if (!pendingOrder || !shippingAddress) throw new Error('One or more of the required fields were not provided.');
+    if (!pendingOrder || !shippingAddress) throw new Error('Missing either a shipping address or a pending order.');
 
     //get cart payload from token
     let cart:Cart | undefined;
@@ -317,14 +316,15 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
             message: 'Forbidden',
           });
         };
+        console.log(checkoutSessionCompleted);
         //MUST BE SET TO PAYLOAD.CART DO NOT USE REQ THIS IS HANDLED DIFFERENTLY THAN THE OTHERS!!!
         cart = new Cart(
           payload.cart.items,
-          payload.cart.subtotalInDollars,
-          payload.cart.taxInDollars,
+          checkoutSessionCompleted.amount_subtotal /100,
+          checkoutSessionCompleted.amount_total /100 - checkoutSessionCompleted.amount_subtotal /100,
           payload.cart.promoCodeID,
           payload.cart.discountAmountInDollars,
-          payload.cart.finalPriceInDollars,
+          checkoutSessionCompleted.amount_total /100,
           payload.cart.desiredShipDate
         );
         //we don't have a field for the total quantity calculations so we will calculate it here, we can just put this in the cart constructor
@@ -347,14 +347,20 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
         //order was successfully processed in our system
 
         //update stripe payment intent by the payment intent's id
-        await stripe.paymentIntents.update(paymentIntentSucceeded.id,{
-          metadata:{
-            orderID: orderDoc._id.toString()
-          }
-        });
+        // await stripe.paymentIntents.update(paymentIntentSucceeded.id,{
+        //   metadata:{
+        //     orderID: orderDoc._id.toString()
+        //   }
+        // });
         //remove the cart token items from mongoDB
-        await deletePendingOrderDocByCartToken(pendingOrder.cartToken);
+        //await deletePendingOrderDocByCartToken(pendingOrder.cartToken);
 
+        //update the pending order do with the order DOC ID
+        let updatedPendingOrder:PendingOrder = pendingOrder;
+        updatedPendingOrder.orderID = orderDoc._id.toString();
+        console.log('orderID',orderDoc._id.toString());
+        console.log('updated pending order',updatedPendingOrder);
+        await updatePendingOrderDocByDocID(pendingOrder._id.toString(),updatedPendingOrder);
         //retrieve user info so we can get their email
         const userDoc:User | null = await getUserByID(orderDoc.userID);
         if (!userDoc) throw new Error('No user doc found!');
@@ -415,6 +421,34 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
       cartToken: tempCartToken,
       cart: cart
     });
+  };
+});
+
+shopRouter.get('/orders/checkout/fetchPlacedOrder/:pendingOrderDocID',authenticateLoginToken,async(req:any,res,next)=>{
+  try{
+    const pendingOrderDocID:string = req.params.pendingOrderDocID;
+    if (!pendingOrderDocID) throw new Error('A pending order doc ID was not provided in the request.');
+    try{
+      const pendingOrderDoc: PendingOrder | null = await getPendingOrderDocByDocID(pendingOrderDocID.toString());
+      if (!pendingOrderDoc) throw new Error('A pending order doc was not found for the provided pending order docID');
+      if (!pendingOrderDoc.orderID) throw new Error('A pending order doc ID was not found.');
+      const orderDoc:Order | null = await getOrderByOrderID(pendingOrderDoc.orderID);
+      if (!orderDoc) throw new Error('An order doc was not found.');
+      //verify user owns the pending order doc
+      try{
+        if (pendingOrderDoc.userID.toString()!==req.payload.loginPayload.user._id.toString()){
+          throw new Error('The user is not authorized to view this order.');
+        }else{
+          res.status(HttpStatusCodes.OK).json({orderData: orderDoc});
+        };
+      }catch(err){
+        handleError(res,HttpStatusCodes.UNAUTHORIZED,err);
+      };
+    }catch(err){
+      handleError(res,HttpStatusCodes.NOT_FOUND,err);
+    };
+  }catch(err){
+    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
 });
 
@@ -603,13 +637,16 @@ shopRouter.post('/carts/create-checkout-session',authenticateCartToken,authentic
   try{
     if (!pendingOrderDoc) throw new Error('A pending order doc was not found!');
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
+    const giftMessage:string = req.body.giftMessage || '';
     //create session
     const session = await stripe.checkout.sessions.create({
       automatic_tax:{
         'enabled': true
       },
       metadata:{
-        'pendingOrderID': pendingOrderDoc._id.toString()
+        'pendingOrderID': pendingOrderDoc._id.toString(),
+        'userID': req.payload.loginPayload.user._id.toString(),
+        'giftMessage': giftMessage
       },
       payment_method_types: [
         'card',
@@ -646,8 +683,8 @@ shopRouter.post('/carts/create-checkout-session',authenticateCartToken,authentic
           quantity: item.quantity,
         }
       }),
-      success_url: `https://www.nybagelsclub.com/#/checkout/success`,
-      cancel_url: `https://www.nybagelsclub.com/#/cart`,
+      success_url: isTestingModeEnabled ? `http://localhost:3000/#/cart/checkout/success/${pendingOrderDoc._id.toString()}` : `https://www.nybagelsclub.com/#/checkout/success/${pendingOrderDoc._id.toString()}`,
+      cancel_url: isTestingModeEnabled ? 'http://localhost:3000/#/cart' : 'https://www.nybagelsclub.com/#/cart'
     })
     //verify a payment intent was successfully created
     if (!session) throw new Error('An error occured when creating a session.');
@@ -717,7 +754,6 @@ shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any
 shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:any,res,next)=>{
   let userDoc:User | null = null;
   let membershipTier:string = 'Non-Member';
-  
   //get cart from payload
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
@@ -742,7 +778,7 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
 
   try {
     // Check for missing or incorrect fields
-    if (!itemID || typeof updatedQuantity !== 'number' || !selection || updatedQuantity<0) {
+    if (!itemID || typeof updatedQuantity !== 'number' || updatedQuantity<0) {
       throw new Error('Required fields were not provided, or provided in an incorrect format.');
     };
     // Check if a cart is provided

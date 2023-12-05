@@ -13,6 +13,10 @@ const PendingOrderSchema = new mongoose.Schema({
     type: Date,
     required: true,
     default: new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  },
+  orderID:{
+    type:String,
+    required:false,
   }
 });
 
