@@ -43,7 +43,7 @@ export const getOrderPlacedMailOptions = function(
     subject: `Thank you for your New York Bagels Club order`,
     html: 
       `
-      <li class='order-item' style='font-size: 16px;'>
+      <div class='order-item' style='font-size: 16px;'>
       <p style='font-size: 16px>Thank you for choosing New York Bagels Club! Your Order Number is ${order._id}</p>
       <br></br>
       <p class='order-item-expand-toggle' style='font-size: 16px;'>
@@ -113,7 +113,7 @@ export const getOrderPlacedMailOptions = function(
             </div>
           `}
       </div>
-    </li>    
+    </div>    
       `,
   })
 };
