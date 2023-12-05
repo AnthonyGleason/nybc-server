@@ -295,7 +295,7 @@ shopRouter.post('/stripe-webhook-checkout-session-success', async(req:any,res,ne
       state: checkoutSessionCompleted.customer_details.address.state,
       postal_code: checkoutSessionCompleted.customer_details.address.postal_code,
       country: checkoutSessionCompleted.customer_details.address.country,
-      phone: checkoutSessionCompleted.customer_phone,
+      phone: checkoutSessionCompleted.customer_details.phone,
       fullName: checkoutSessionCompleted.customer_details.name
     }; 
     const giftMessage:string = checkoutSessionCompleted.metadata.giftMessage || '';
