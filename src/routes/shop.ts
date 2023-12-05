@@ -285,7 +285,6 @@ shopRouter.post('/stripe-webhook-checkout-session-success', async(req:any,res,ne
     const checkoutSessionCompleted = event.data.object;
     if (event.type!=='checkout.session.completed') throw new Error('This route only handles checkout session succeess payments right now.');
 
-    console.log(event);
     //get required properties to create the order doc from the payment intent
     const userID:string = checkoutSessionCompleted.metadata.userID;
     const shippingAddress:Address = {
@@ -358,8 +357,6 @@ shopRouter.post('/stripe-webhook-checkout-session-success', async(req:any,res,ne
         //update the pending order do with the order DOC ID
         let updatedPendingOrder:PendingOrder = pendingOrder;
         updatedPendingOrder.orderID = orderDoc._id.toString();
-        console.log('orderID',orderDoc._id.toString());
-        console.log('updated pending order',updatedPendingOrder);
         await updatePendingOrderDocByDocID(pendingOrder._id.toString(),updatedPendingOrder);
         //retrieve user info so we can get their email
         const userDoc:User | null = await getUserByID(orderDoc.userID);
@@ -683,7 +680,7 @@ shopRouter.post('/carts/create-checkout-session',authenticateCartToken,authentic
           quantity: item.quantity,
         }
       }),
-      success_url: isTestingModeEnabled ? `http://localhost:3000/#/cart/checkout/success/${pendingOrderDoc._id.toString()}` : `https://www.nybagelsclub.com/#/checkout/success/${pendingOrderDoc._id.toString()}`,
+      success_url: isTestingModeEnabled ? `http://localhost:3000/#/cart/checkout/success/${pendingOrderDoc._id.toString()}` : `https://www.nybagelsclub.com/#/cart/checkout/success/${pendingOrderDoc._id.toString()}`,
       cancel_url: isTestingModeEnabled ? 'http://localhost:3000/#/cart' : 'https://www.nybagelsclub.com/#/cart'
     })
     //verify a payment intent was successfully created

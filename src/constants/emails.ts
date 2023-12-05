@@ -87,7 +87,7 @@ export const getOrderPlacedMailOptions = function(
           ` : ''}
           <p style='font-size: 16px;'>
             <span style='font-size: 16px;'>Calculated Tax:</span>
-            <span style='font-size: 16px;'><strong>$${order.cart.taxInDollars}</strong></span>
+            <span style='font-size: 16px;'><strong>$${order.cart.taxInDollars.toFixed(2)}</strong></span>
           </p>
           <p style='font-size: 16px;'>
             <span style='font-size: 16px;'>Shipping Cost:</span>
