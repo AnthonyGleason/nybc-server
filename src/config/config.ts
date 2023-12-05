@@ -1,2 +1,2 @@
-export const isTestingModeEnabled:boolean = false;
+export const isTestingModeEnabled:boolean = true;
 export const isMongooseConnectionToProductionEnabled = true
