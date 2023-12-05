@@ -16,7 +16,7 @@ import { createPendingOrderDoc, deletePendingOrderDocByCartToken, getPendingOrde
 import { getCustomOrderMailOptions, getOrderPlacedMailOptions } from '@src/constants/emails';
 import { transporter } from "@src/server";
 import { getSelectionName } from '@src/helpers/shop';
-import { isTestingModeEnabled } from '@src/config/config';
+import { isTestingModeEnabled, redirectSuccessfulCheckoutsToLocalhost } from '@src/config/config';
 
 export const shopRouter = Router();
 
@@ -680,8 +680,8 @@ shopRouter.post('/carts/create-checkout-session',authenticateCartToken,authentic
           quantity: item.quantity,
         }
       }),
-      success_url: isTestingModeEnabled ? `http://localhost:3000/#/cart/checkout/success/${pendingOrderDoc._id.toString()}` : `https://www.nybagelsclub.com/#/cart/checkout/success/${pendingOrderDoc._id.toString()}`,
-      cancel_url: isTestingModeEnabled ? 'http://localhost:3000/#/cart' : 'https://www.nybagelsclub.com/#/cart'
+      success_url: redirectSuccessfulCheckoutsToLocalhost ? `http://localhost:3000/#/cart/checkout/success/${pendingOrderDoc._id.toString()}` : `https://www.nybagelsclub.com/#/cart/checkout/success/${pendingOrderDoc._id.toString()}`,
+      cancel_url: redirectSuccessfulCheckoutsToLocalhost ? 'http://localhost:3000/#/cart' : 'https://www.nybagelsclub.com/#/cart'
     })
     //verify a payment intent was successfully created
     if (!session) throw new Error('An error occured when creating a session.');
