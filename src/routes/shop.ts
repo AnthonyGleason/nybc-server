@@ -281,9 +281,10 @@ shopRouter.post('/stripe-webhook-payment-succeeded', async(req:any,res,next)=>{
   };
   
   try{
+    console.log('event', event);
     //ensure the event is the correct type
     const checkoutSessionCompleted = event.data.object;
-    console.log(checkoutSessionCompleted);
+    console.log('checkout-success', checkoutSessionCompleted);
     if (event.type!=='checkout.session.completed') throw new Error('This route only handles checkout session succeess payments right now.');
 
     //get required properties to create the order doc from the payment intent
