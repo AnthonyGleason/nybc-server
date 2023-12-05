@@ -285,6 +285,7 @@ shopRouter.post('/stripe-webhook-checkout-session-success', async(req:any,res,ne
     const checkoutSessionCompleted = event.data.object;
     if (event.type!=='checkout.session.completed') throw new Error('This route only handles checkout session succeess payments right now.');
 
+    console.log(event);
     //get required properties to create the order doc from the payment intent
     const userID:string = checkoutSessionCompleted.metadata.userID;
     const shippingAddress:Address = {
