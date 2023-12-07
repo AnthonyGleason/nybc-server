@@ -144,8 +144,13 @@ usersRouter.post('/logout', authenticateLoginToken, (req:any,res,next)=>{
   };
 });
 
-usersRouter.get('/verify', authenticateLoginToken,(req,res,next)=>{
-  res.status(HttpStatusCodes.OK).json({isValid: true});
+usersRouter.get('/verify', authenticateLoginToken,(req:any,res,next)=>{
+  //get admin status
+  const isAdmin:boolean = (req.payload.loginPayload.user.group.toLowerCase()==='admin');
+  res.status(HttpStatusCodes.OK).json({
+    isValid: true,
+    isAdmin: isAdmin
+  });
 });
 
 usersRouter.get('/membershipLevel', authenticateLoginToken, async (req:any,res,next)=>{

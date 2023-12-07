@@ -1,6 +1,4 @@
-import HttpStatusCodes from "@src/constants/HttpStatusCodes";
 import { getItemByID } from "@src/controllers/item";
-import { handleError } from "@src/helpers/error";
 import { BagelItem, CartItem, SpreadItem } from "@src/interfaces/interfaces";
 
 export default class Cart{
@@ -8,7 +6,6 @@ export default class Cart{
   subtotalInDollars:number;
   taxInDollars:number;
   totalQuantity:number;
-  promoCodeID:string;
   discountAmountInDollars:number;
   finalPriceInDollars:number;
   desiredShipDate:Date;
@@ -17,7 +14,6 @@ export default class Cart{
     cartItems?:CartItem[],
     subtotalInDollars?:number,
     taxInDollars?:number,
-    promoCodeID?:string,
     discountAmountInDollars?:number,
     finalPriceInDollars?:number,
     desiredShipDate?:Date
@@ -26,48 +22,9 @@ export default class Cart{
     this.subtotalInDollars = subtotalInDollars || 0;
     this.taxInDollars = taxInDollars || 0;
     this.totalQuantity = 0;
-    this.promoCodeID = promoCodeID || ''; 
     this.discountAmountInDollars = discountAmountInDollars || 0;
     this.finalPriceInDollars = finalPriceInDollars || 0;
     this.desiredShipDate = desiredShipDate || new Date();
-  };
-
-  applyPromoPerk = (perk:string):void=>{
-    switch(perk){
-      case '15_PERCENT_OFF':
-        for (let cartItem of this.items){
-          cartItem.unitPriceInDollars = cartItem.unitPriceInDollars - (cartItem.unitPriceInDollars * 0.15);
-        };
-        break;
-      case '25_PERCENT_OFF':
-        for (let cartItem of this.items){
-          cartItem.unitPriceInDollars = cartItem.unitPriceInDollars - (cartItem.unitPriceInDollars * 0.25);
-        };
-        break;
-      default:
-        if (perk) console.log('promo code not handled',perk); //if a perk was declared but not handled log it
-    };
-  };
-
-  getPromoCodeDiscountMultiplier = (perk:string):number=>{
-    switch(perk){
-      case '15_PERCENT_OFF':
-        return 0.15;
-      case '25_PERCENT_OFF':
-        return 0.25;
-      default:
-        console.log('promo code not handled',perk);
-        return 0; //RETURN NO DISCOUNT, if you return 1 the customer gets 100% off
-    };
-  };
-
-  calcPromoCodeDiscountAmount = (perk:string):number =>{
-    let discountAmountTotal:number = 0;
-    for (let cartItem of this.items){
-      discountAmountTotal += ((cartItem.unitPriceInDollars * cartItem.quantity) * this.getPromoCodeDiscountMultiplier(perk));
-    };
-    this.discountAmountInDollars = discountAmountTotal;
-    return discountAmountTotal;
   };
 
   calcTotalQuantity = ():number=>{

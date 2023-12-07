@@ -51,7 +51,6 @@ export interface CartInterface{
   subtotalInDollars:number;
   taxInDollars:number;
   totalQuantity:number;
-  promoCodeID: string,
   discountAmountInDollars:number;
   finalPriceInDollars:number;
   desiredShipDate:Date;
@@ -87,18 +86,6 @@ export interface PasswordReset{
 export interface TempCartToken{
   userID: string,
   cartToken: string
-};
-
-export interface PromoCode{
-  code: string,
-  dateOfExpiry:Date,
-  totalAllowedUses?:number,
-  totalTimesUsed:number,
-  createdByUserID:string,
-  description:string,
-  disabled: boolean,
-  perk: string, // for example "Free Shipping", "15% Off", "$25 Off",
-  _id:string | mongoose.Types.ObjectId //unique id given by mongodb
 };
 
 export interface PendingOrder{

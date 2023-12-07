@@ -1,7 +1,4 @@
-import { createPasswordReset } from "@src/controllers/passwordReset";
-import { passwordResetTokens } from "@src/helpers/auth";
-import { getRandomUrlString } from "@src/helpers/misc";
-import { Order, PasswordReset } from "@src/interfaces/interfaces";
+import { Order } from "@src/interfaces/interfaces";
 
 export const getNewRegistrationMailOptions = function(email:string){
   return({
@@ -40,7 +37,7 @@ export const getOrderPlacedMailOptions = function(
   return({
     from: 'noreply@nybagelsclub.com',
     to: userEmail,
-    subject: `Thank you for your New York Bagels Club order`,
+    subject: `Thank you for your New York Bagels Club order!`,
     html: 
       `
       <div class='order-item' style='font-size: 16px;'>
@@ -79,12 +76,6 @@ export const getOrderPlacedMailOptions = function(
             <span style='font-size: 16px;'>Basket Subtotal:</span>
             <span style='font-size: 16px;'><strong>$${order.cart.subtotalInDollars.toFixed(2)}</strong></span>
           </p>
-          ${order.cart.promoCodeID ? `
-            <p style='font-size: 16px;'>
-              <span style='font-size: 16px;'>Promo Code Savings:</span>
-              <span style='font-size: 16px;'><strong>-$${order.cart.discountAmountInDollars.toFixed(2)}</strong></span>
-            </p>
-          ` : ''}
           <p style='font-size: 16px;'>
             <span style='font-size: 16px;'>Calculated Tax:</span>
             <span style='font-size: 16px;'><strong>$${order.cart.taxInDollars.toFixed(2)}</strong></span>
@@ -93,6 +84,13 @@ export const getOrderPlacedMailOptions = function(
             <span style='font-size: 16px;'>Shipping Cost:</span>
             <span style='font-size: 16px;'><strong>Free</strong></span>
           </p>
+          ${order.cart.discountAmountInDollars > 0 ?
+            `<p style='font-size: 16px;'>
+                <span>Discount Applied:</span>
+                <span><strong>-$${order.cart.discountAmountInDollars.toFixed(2)}</strong></span>
+            </p>` :
+            null
+          }
           <p style='font-size: 16px;'>
             <span style='font-size: 16px;'>Total Cost:</span>
             <span style='font-size: 16px;'><strong>$${order.cart.finalPriceInDollars.toFixed(2)}</strong></span>

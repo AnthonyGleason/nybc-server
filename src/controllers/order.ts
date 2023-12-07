@@ -76,8 +76,3 @@ export const getAllOrders = async function():Promise<Order[] | null>{
 export const deleteOrderByOrderID = async function(orderID:string){
   return await OrderModel.findByIdAndDelete(orderID);
 };
-
-//get orders by promo code id
-export const getOrderByPromoCodeID = async function(orderID:string):Promise<Order[] | null>{
-  return await OrderModel.find({'cart.promoCodeID' : orderID});
-};
