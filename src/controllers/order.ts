@@ -9,13 +9,12 @@ export const createOrder = async function(
   shippingAddress:Address,
   giftMessage?:string,
   ):Promise<Order>{
-  console.log(new Date());
-  console.log(new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })))
   return await OrderModel.create({
     userID: userID,
     cart:cart,
     shippingAddress:shippingAddress,
-    giftMessage:giftMessage
+    giftMessage:giftMessage,
+    dateCreated: new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
   });
 };
 
