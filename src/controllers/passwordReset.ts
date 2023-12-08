@@ -41,11 +41,11 @@ export const getPasswordResetByDocID = async function(docID:string):Promise<Pass
 };
 
 //delete a password reset by docID
-export const deletePasswordResetByDocID = async function(docID:string):Promise<PasswordReset | null>{
+export const deletePasswordResetByDocID = async function(docID:string){
   return await PasswordResetModel.findByIdAndDelete(docID);
 };
 
 //delete a password reset by email
-export const deletePasswordResetByEmail = async function(email:string):Promise<PasswordReset | null>{
+export const deletePasswordResetByEmail = async function(email:string){
   return await PasswordResetModel.findOneAndDelete({ email: email });
 };

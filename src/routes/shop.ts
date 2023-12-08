@@ -7,7 +7,7 @@ import { stripe } from '@src/util/stripe';
 import { authenticateCartToken, authenticateLoginToken, handleCartLoginAuth} from '@src/middlewares/auth';
 import { getMembershipByUserID } from '@src/controllers/membership';
 import { getUserByID } from '@src/controllers/user';
-import { Address, BagelItem, CartItem, Membership, Order, PendingOrder, SpreadItem, User } from '@src/interfaces/interfaces';
+import { Address, Membership, Order, PendingOrder, Product, User } from '@src/interfaces/interfaces';
 import { createOrder, getAllOrdersByUserID, getOrderByOrderID } from '@src/controllers/order';
 import jwt from 'jsonwebtoken';
 import { handleError } from '@src/helpers/error';
@@ -395,7 +395,7 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
 
   try{
     //get item data from mongoDB
-    const itemDoc:BagelItem | SpreadItem | null = await getItemByID(itemID);
+    const itemDoc:Product | null = await getItemByID(itemID);
     if (!itemDoc) throw new Error('An error has occured when retrieving item data.');
     
     try{
@@ -432,7 +432,7 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
 //get all shop items
 shopRouter.get('/all', async (req,res,next)=>{
   try{
-    const allItems:(BagelItem | SpreadItem)[] | null = await getAllItems();
+    const allItems:Product[] | null = await getAllItems();
     if (!allItems || allItems.length===0) throw new Error('No shop items were found.');
     res.status(HttpStatusCodes.OK).json({allItems:allItems});
   }catch(err){
@@ -443,9 +443,8 @@ shopRouter.get('/all', async (req,res,next)=>{
 //get shop item by item id
 shopRouter.get('/item/:itemID', async (req,res,next)=>{
   const itemID:string = req.params.itemID;
-
   try{
-    const item:BagelItem | SpreadItem | null = await getItemByID(itemID);
+    const item:Product | null = await getItemByID(itemID);
     if (!item) throw new Error('Item not found for the provided itemID');
     res.status(HttpStatusCodes.OK).json({item: item});
   }catch(err){

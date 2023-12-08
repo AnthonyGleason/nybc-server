@@ -26,7 +26,7 @@ export const updatePendingOrderDocByDocID = async function(docID:string, updated
 };
 
 //delete a pending order doc by cart token
-export const deletePendingOrderDocByCartToken = async function(cartToken:string):Promise<PendingOrder | null>{
+export const deletePendingOrderDocByCartToken = async function(cartToken:string){
   return await PendingOrderModel.findOneAndDelete({
     cartToken: cartToken
   });

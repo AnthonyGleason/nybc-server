@@ -1,4 +1,5 @@
 import { Order } from "@src/interfaces/interfaces";
+import { getSelectionName } from "@src/helpers/shop";
 
 export const getNewRegistrationMailOptions = function(email:string){
   return({
@@ -20,20 +21,6 @@ export const getOrderPlacedMailOptions = function(
   userEmail:string,
   order:Order
 ){
-  const getFormattedSelection = function(cat:string, selection?:string):string{
-    let formattedSelection:string = '';
-    switch(cat){
-      case 'spread':
-        formattedSelection = '1 LB';
-        break;
-      case 'bagel':
-        if (selection==='six') formattedSelection = 'Six Pack';
-        if (selection==='dozen') formattedSelection = "Baker's Dozen";
-        break;
-    }
-    return formattedSelection;
-  };
-  
   return({
     from: 'noreply@nybagelsclub.com',
     to: userEmail,
@@ -65,7 +52,7 @@ export const getOrderPlacedMailOptions = function(
           <ul style='font-size: 16px;'>
             ${order.cart.items.map((cartItem, index) => `
               <li key=${index} style='font-size: 16px;'>
-                <span style='font-size: 16px;'>${cartItem.quantity}x ${cartItem.itemData.name} (${getFormattedSelection(cartItem.itemData.cat, cartItem.selection || '')}):</span>
+                <span style='font-size: 16px;'>${cartItem.quantity}x ${cartItem.itemData.name}, ${getSelectionName(cartItem)}:</span>
                 <span style='font-size: 16px;'><strong>$${(cartItem.unitPriceInDollars * cartItem.quantity).toFixed(2)}</strong></span>
               </li>
             `).join('')}
@@ -89,7 +76,7 @@ export const getOrderPlacedMailOptions = function(
                 <span>Discount Applied:</span>
                 <span><strong>-$${order.cart.discountAmountInDollars.toFixed(2)}</strong></span>
             </p>` :
-            null
+            ''
           }
           <p style='font-size: 16px;'>
             <span style='font-size: 16px;'>Total Cost:</span>
@@ -138,7 +125,7 @@ export const getCustomOrderMailOptions = function(
         <p style="font-size: 16px;">A user with the email "${userEmail}" has requested a custom order</p>
         <p style="font-size: 16px;">They are requesting a quantity of, "${quantityInput}"</p>
         <p style="font-size: 16px;">They left this request for us, "${request}".</p>
-        <p style="font-size: 16px;">They ${requestsPackageDealStr} the $275 package offering.</p> 
+        <p style="font-size: 16px;">They ${requestsPackageDealStr} the $295 package offering.</p> 
         <br></br>
         <p font-size: 20px;">Please respond to this inquiry within 24 hours.</p>
       `,

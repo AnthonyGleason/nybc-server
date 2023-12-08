@@ -1,5 +1,5 @@
 import { getItemByID } from "@src/controllers/item";
-import { BagelItem, CartItem, SpreadItem } from "@src/interfaces/interfaces";
+import { BagelItem, CartItem, PastryItem, Product, SpreadItem } from "@src/interfaces/interfaces";
 
 export default class Cart{
   items:CartItem[];
@@ -89,6 +89,9 @@ export default class Cart{
       } else if (cartItem.itemData.cat === 'spread') {
         const tempItemData:SpreadItem = cartItem.itemData as SpreadItem;
         cartItem.unitPriceInDollars = tempItemData.price - (tempItemData.price * discountMultiplier);
+      }else if (cartItem.itemData.cat === 'pastry'){
+        const tempItemData:PastryItem = cartItem.itemData as PastryItem;
+        cartItem.unitPriceInDollars = tempItemData.price - (tempItemData.price * discountMultiplier);
       };
     });
   };
@@ -126,67 +129,65 @@ export default class Cart{
           foundIndex = index;
           break; // Exit the loop if the item is found
         };
+      }else if (cartItem.itemData.cat === 'pastry'){
+        const itemData: PastryItem = cartItem.itemData as PastryItem;
+        if (cartItem.selection === selection && itemData.name === itemName) {
+          foundIndex = index;
+          break; // Exit the loop if the item is found
+        };
       };
     };    
     return foundIndex;
   };
 
   verifyUnitPrices = async () =>{
-    const promises: Promise<BagelItem | SpreadItem | undefined>[] = this.items.map(async (cartItem) => {
-      if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'six') {
-        return getItemByID(cartItem.itemData._id) as Promise<BagelItem>;
-      } else if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'dozen') {
+    const promises: Promise<Product | undefined>[] = this.items.map(async (cartItem) => {
+      if (cartItem.itemData.cat === 'bagel' && (cartItem.selection ==='six'||cartItem.selection==='dozen')) {
         return getItemByID(cartItem.itemData._id) as Promise<BagelItem>;
       } else if (cartItem.itemData.cat === 'spread') {
         return getItemByID(cartItem.itemData._id) as Promise<SpreadItem>;
+      } else if (cartItem.itemData.cat === 'pastry') {
+        return getItemByID(cartItem.itemData._id) as Promise<PastryItem>;
       }
       return Promise.resolve(undefined);
     });
     
-    const itemDataArray: (BagelItem | SpreadItem | undefined)[] = await Promise.all(promises);
+    const itemDataArray: (Product | undefined)[] = await Promise.all(promises);
 
     // Now that we have all the itemData, you can update cartItem.unitPrice here.
     this.items.forEach((cartItem, index) => {
       if (itemDataArray[index]) {
         const itemData = itemDataArray[index];
         if (itemData===undefined) return;
-        if (
-          cartItem.itemData.cat === 'bagel' &&
-          cartItem.selection === 'six'
-        ) {
+        if (cartItem.itemData.cat === 'bagel') {
           const tempItemData = itemData as BagelItem;
-          cartItem.unitPriceInDollars = tempItemData.sixPrice;
-        } 
-        else if (
-          cartItem.itemData.cat === 'bagel' && 
-          cartItem.selection === 'dozen'
-        ) {
-          const tempItemData = itemData as BagelItem;
-          cartItem.unitPriceInDollars = tempItemData.dozenPrice;
-        } 
-        else if (
-          cartItem.itemData.cat === 'spread'
-        ) {
+          cartItem.unitPriceInDollars = (cartItem.selection === 'six' ? tempItemData.sixPrice : tempItemData.dozenPrice);
+        } else if (cartItem.itemData.cat === 'spread') {
           const tempItemData = itemData as SpreadItem;
           cartItem.unitPriceInDollars = tempItemData.price;
-        }
-      }
+        }else if(
+          cartItem.itemData.cat ==='pastry'
+        ){
+          const tempItemData = itemData as PastryItem;
+          cartItem.unitPriceInDollars = tempItemData.price;
+        };
+      };
     });
   };
 
-  handleModifyCart = (itemDoc:BagelItem | SpreadItem, updatedQuantity:number, selection?:string)=>{
+  handleModifyCart = (itemDoc:Product, updatedQuantity:number, selection?:string)=>{
     const itemIndex:number | null = this.getIndexOfItem(itemDoc.name , selection || undefined);
     if (itemIndex === null && updatedQuantity>0) {
       // Item is not in the user's cart; add it with the given quantity
       let unitPrice:number = 0;
-      if (itemDoc.cat==='bagel' && selection==='six'){
+      if (itemDoc.cat==='bagel' && selection){
         const tempItemDoc:BagelItem = itemDoc as BagelItem;
-        unitPrice = tempItemDoc.sixPrice;
-      }else if (itemDoc.cat==='bagel' && selection==='dozen'){
-        const tempItemDoc:BagelItem = itemDoc as BagelItem;
-        unitPrice = tempItemDoc.dozenPrice;
-      } else if (itemDoc.cat==='spread'){
+        unitPrice = (selection === 'six' ? tempItemDoc.sixPrice : tempItemDoc.dozenPrice);
+      }else if (itemDoc.cat==='spread'){
         const tempItemDoc:SpreadItem = itemDoc as SpreadItem;
+        unitPrice = tempItemDoc.price;
+      }else if(itemDoc.cat==='pastry'){
+        const tempItemDoc:PastryItem = itemDoc as PastryItem;
         unitPrice = tempItemDoc.price;
       }else{
         throw new Error('The requested selection is invalid.');

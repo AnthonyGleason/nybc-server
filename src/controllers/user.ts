@@ -50,6 +50,6 @@ export const updateUserByUserID = async function(userID: string, updatedUser: Us
 };
 
 //delete a user by userID
-export const deleteUserByUserID = async function(userID:string):Promise<User | null>{
+export const deleteUserByUserID = async function(userID:string){
   return await UserModel.findByIdAndDelete(userID);
 };

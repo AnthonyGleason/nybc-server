@@ -12,20 +12,18 @@ export interface User{
   _id:string | mongoose.Types.ObjectId //unique id given by mongodb
 };
 
-export interface SpreadItem{
-  price: number,
-  name: string,
-  _id: string //unique id given by mongodb,
-  cat:string,
+export interface SpreadItem extends Product{
+  price: number
 };
 
 //item
-export interface BagelItem{
+export interface BagelItem extends Product{
   dozenPrice:number,
-  sixPrice:number,
-  name: string,
-  _id: string, // unique id given by mongodb
-  cat:string,
+  sixPrice:number
+};
+
+export interface PastryItem extends Product{
+  price: number
 };
 
 export interface CartItem{
@@ -34,6 +32,13 @@ export interface CartItem{
   quantity: number,
   unitPriceInDollars: number,
 };
+
+export interface Product{
+  price: number;
+  name: string;
+  _id: string;
+  cat: string;
+}
 
 export interface Address{
   line1:string,
