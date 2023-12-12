@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const MembershipSchema = new mongoose.Schema({
-  renewalDate:{ //doubles as an expiration date
+  expirationDate:{ //doubles as an expiration date
     type:Date,
   },
   tier:{
@@ -11,6 +11,10 @@ const MembershipSchema = new mongoose.Schema({
   userID:{
     type:String,
     required:true
+  },
+  deliveriesLeft:{
+    type:Number,
+    default: 0
   }
 });
 

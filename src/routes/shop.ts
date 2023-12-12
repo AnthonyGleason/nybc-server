@@ -7,15 +7,15 @@ import { stripe } from '@src/util/stripe';
 import { authenticateCartToken, authenticateLoginToken, handleCartLoginAuth} from '@src/middlewares/auth';
 import { getMembershipByUserID } from '@src/controllers/membership';
 import { getUserByID } from '@src/controllers/user';
-import { Address, Membership, Order, PendingOrder, Product, User } from '@src/interfaces/interfaces';
-import { createOrder, getAllOrdersByUserID, getOrderByOrderID } from '@src/controllers/order';
-import jwt from 'jsonwebtoken';
+import { Membership, Order, PendingOrder, Product, User } from '@src/interfaces/interfaces';
+import { getAllOrdersByUserID, getOrderByOrderID } from '@src/controllers/order';
 import { handleError } from '@src/helpers/error';
 import { createPendingOrderDoc, getPendingOrderDocByDocID, updatePendingOrderDocByDocID } from '@src/controllers/pendingOrder';
 import { getCustomOrderMailOptions, getOrderPlacedMailOptions } from '@src/constants/emails';
 import { transporter } from "@src/server";
-import { getSelectionName } from '@src/helpers/shop';
+import { getSelectionName, handleOrderPayment } from '@src/helpers/shop';
 import { isTestingModeEnabled, redirectSuccessfulCheckoutsToLocalhost } from '@src/config/config';
+import { handleSubscriptionCreated } from '@src/helpers/memberships';
 
 export const shopRouter = Router();
 
@@ -25,88 +25,22 @@ shopRouter.post('/stripe-webhook-checkout-session-success', async(req:any,res,ne
     const sig = req.headers['stripe-signature'];
     const endpointSecret: string | undefined = isTestingModeEnabled===true ? process.env.STRIPE_WEBHOOK_TEST_SIGNING_SECRET : process.env.STRIPE_WEBHOOK_SIGNING_SECRET;
     //catch any errors that occur when constructing the webhook event (such as wrong body format, too many characters etc...)
-    const event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret); //req.rawBody is assigned through middleware in server.js
+    const event:any = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret); //req.rawBody is assigned through middleware in server.js
     if (!event || !event.data) throw new Error('No event data was found! This route requires this.');
     //ensure the event is the correct type
-    const checkoutSessionCompleted = event.data.object;
     if (event.type!=='checkout.session.completed') throw new Error('This route only handles checkout session succeess payments right now.');
-
-    //get required properties to create the order doc from the payment intent
-    const userID:string = checkoutSessionCompleted.metadata.userID;
-    const shippingAddress:Address = {
-      line1: checkoutSessionCompleted.customer_details.address.line1,
-      line2: checkoutSessionCompleted.customer_details.address.line2 || undefined,
-      city: checkoutSessionCompleted.customer_details.address.city,
-      state: checkoutSessionCompleted.customer_details.address.state,
-      postal_code: checkoutSessionCompleted.customer_details.address.postal_code,
-      country: checkoutSessionCompleted.customer_details.address.country,
-      phone: checkoutSessionCompleted.customer_details.phone,
-      fullName: checkoutSessionCompleted.customer_details.name
-    }; 
-    const giftMessage:string = checkoutSessionCompleted.metadata.giftMessage || '';
-    const pendingOrderDocID:string = checkoutSessionCompleted.metadata.pendingOrderID;
-    //get pending order from mongoDB
-    let pendingOrder:PendingOrder | null = await getPendingOrderDocByDocID(pendingOrderDocID);
-    //validate all required fields were provided
-    if (!pendingOrder || !shippingAddress) throw new Error('Missing either a shipping address or a pending order.');
-
-    //get cart payload from token
-    let cart:Cart | undefined;
-    jwt.verify(
-      pendingOrder.cartToken, process.env.SECRET as jwt.Secret,
-      async (err:any, payload:any) => {
-        //an error was found when verifying the bearer token
-        if (err) {
-          return res.status(403).json({
-            isValid: false,
-            message: 'Forbidden',
-          });
-        };
-        //MUST BE SET TO PAYLOAD.CART DO NOT USE REQ THIS IS HANDLED DIFFERENTLY THAN THE OTHERS!!!
-        cart = new Cart(
-          payload.cart.items,
-          checkoutSessionCompleted.amount_subtotal /100,
-          checkoutSessionCompleted.total_details.amount_tax / 100,
-          checkoutSessionCompleted.total_details.amount_discount / 100,
-          checkoutSessionCompleted.amount_total /100,
-          new Date(payload.cart.desiredShipDate)
-        );
-        //we don't have a field for the total quantity calculations so we will calculate it here, we can just put this in the cart constructor
-        cart.calcTotalQuantity();
-      }
-    );
-    
-    //verify the cart was successfully validated
-    if (!cart) throw new Error('A cart was not found or is not valid.');
     try{
-      const orderDoc: Order = await createOrder(
-        userID,
-        cart,
-        shippingAddress,
-        giftMessage
-      );
-      if (!orderDoc) throw new Error('An error has occured when updating the order doc.');
-
-      //update the pending order do with the order DOC ID
-      let updatedPendingOrder:PendingOrder = pendingOrder;
-      //if the updated pending order already has an orderID that means an order was already placed
-      //PREVENTS DUPLICATE ORDERS
-      try{
-        if (pendingOrder.orderID) throw new Error('A duplicate order was prevented. This order has already been processed.');
-      }catch(err){
-        handleError(res,HttpStatusCodes.CONFLICT,err);
+      if (event.data.object.mode==='subscription'){
+        await handleSubscriptionCreated(event,res);
+        res.status(HttpStatusCodes.OK);
+      }else if(event.data.object.mode==='payment'){
+        await handleOrderPayment(event,res);
+        res.status(HttpStatusCodes.OK);
+      }else{
+        throw new Error('This only handles subscriptions at the moment.');
       };
-      updatedPendingOrder.orderID = orderDoc._id.toString();
-      await updatePendingOrderDocByDocID(pendingOrder._id.toString(),updatedPendingOrder);
-      //retrieve user info so we can get their email
-      const userDoc:User | null = await getUserByID(orderDoc.userID);
-      if (!userDoc) throw new Error('No user doc found!');
-      //email user that order was successfully placed
-      await transporter.sendMail(getOrderPlacedMailOptions(userDoc.email,orderDoc));
-      // Return a 200 response to acknowledge receipt of the event
-      res.status(HttpStatusCodes.OK).send();
     }catch(err){
-      handleError(res,HttpStatusCodes.NOT_MODIFIED,err);
+      handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
     };
   } catch (err) {
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
@@ -138,11 +72,12 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
     req.payload.cartPayload.cart.desiredShipDate
   );
   if (membershipDoc){
-    await cart.cleanupCart(membershipDoc.tier);
     try{
-      if (membershipDoc.renewalDate && membershipDoc.renewalDate<new Date()) throw new Error('Your membership has expired.');
+      const currentDateStr = new Date().toISOString();
+      if (membershipDoc.expirationDate && new Date(membershipDoc.expirationDate).toISOString() < currentDateStr) throw new Error('Your membership has expired.');
+      await cart.cleanupCart(membershipDoc.tier);
     }catch(err){
-      handleError(res,HttpStatusCodes.FORBIDDEN,err);
+      await cart.cleanupCart('Non-Member');
     };
     const tempCartToken:string = issueCartJWTToken(cart);
     res.status(HttpStatusCodes.OK).json({

@@ -75,10 +75,11 @@ export interface Order{
 
 //membership
 export interface Membership{
-  renewalDate?: Date,
+  expirationDate?: Date,
   tier: string,
   userID: string,
-  _id: string //unique id given by mongodb
+  deliveriesLeft: number
+  _id: string | mongoose.Types.ObjectId //unique id given by mongodb
 };
 
 export interface PasswordReset{

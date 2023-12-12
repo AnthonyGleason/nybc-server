@@ -149,23 +149,36 @@ usersRouter.get('/verify', authenticateLoginToken,(req:any,res,next)=>{
   const isAdmin:boolean = (req.payload.loginPayload.user.group.toLowerCase()==='admin');
   res.status(HttpStatusCodes.OK).json({
     isValid: true,
-    isAdmin: isAdmin
+    isAdmin: isAdmin,
+    userID: req.payload.loginPayload.user._id.toString()
   });
 });
 
 usersRouter.get('/membershipLevel', authenticateLoginToken, async (req:any,res,next)=>{
   //get userID
   const userID:string = req.payload.loginPayload.user._id;
-
-  try{
-    //get membership level
-    const membershipDoc:Membership | null = await getMembershipByUserID(userID);
+  try {
+    const membershipDoc: Membership | null = await getMembershipByUserID(userID);
     if (!membershipDoc) throw new Error('A membership level was not found for the provided user.');
-    res.status(HttpStatusCodes.OK).json({membershipLevel: membershipDoc.tier});
-  }catch(err){
-    //a membership doc was not found so therefore we will set it as a Non-Member
-    res.status(HttpStatusCodes.NOT_FOUND).json({membershipLevel: 'Non-Member'});
-  };
+
+    const currentDate = new Date().toISOString();
+    if (membershipDoc.expirationDate && new Date(membershipDoc.expirationDate).toISOString() < currentDate) {
+      throw new Error('Membership is expired. Using non-member pricing.');
+    };
+
+    res.status(HttpStatusCodes.OK).json({ 
+      membershipLevel: membershipDoc.tier,
+      remainingDeliveries: membershipDoc.deliveriesLeft,
+      expirationDate: membershipDoc.expirationDate
+    });
+  } catch (err) {
+    console.log(err);
+    if (err.message === 'Membership is expired. Using non-member pricing.') {
+        res.status(HttpStatusCodes.FORBIDDEN).json({ membershipLevel: 'Non-Member' });
+    } else {
+        res.status(HttpStatusCodes.NOT_FOUND).json({ membershipLevel: 'Non-Member' });
+    }
+  }
 });
 
 usersRouter.delete('/membershipLevel',authenticateLoginToken, async(req:any,res,next)=>{
