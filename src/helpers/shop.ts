@@ -9,7 +9,7 @@ import { getOrderPlacedMailOptions } from "@src/constants/emails";
 import { transporter } from "@src/server";
 import jwt from 'jsonwebtoken';
 
-export const getSelectionName = async function(cartItem:CartItem){
+export const getSelectionName = function(cartItem:CartItem){
   if (cartItem.itemData.cat==='bagel' && cartItem.selection==='six') return 'Six Pack(s)';
   if (cartItem.itemData.cat==='bagel' && cartItem.selection==='dozen') return 'Dozen(s)';
   if (cartItem.itemData.cat==='spread') return 'One Pound';

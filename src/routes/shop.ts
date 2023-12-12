@@ -199,7 +199,7 @@ shopRouter.post('/carts/create-checkout-session',authenticateCartToken,authentic
           },
         }
       ],
-      line_items: cart.items.map(item => {
+      line_items: cart.items.map((item) => {
         return {
           price_data: {
             currency: "usd",
