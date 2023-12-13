@@ -21,19 +21,24 @@ export const shopRouter = Router();
 
 // relevant documentation for the below webhook route, https://dashboard.stripe.com/webhooks/create?endpoint_location=local
 shopRouter.post('/stripe-webhook-listener', async(req:any,res,next)=>{
-  const sig = req.headers['stripe-signature'];
-  const endpointSecret: string | undefined = isTestingModeEnabled===true ? process.env.STRIPE_WEBHOOK_TEST_SIGNING_SECRET : process.env.STRIPE_WEBHOOK_SIGNING_SECRET;
-  //catch any errors that occur when constructing the webhook event (such as wrong body format, too many characters etc...)
-  const event:any = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret); //req.rawBody is assigned through middleware in server.js
-  if (!event || !event.data) throw new Error('No event data was found! This route requires this.');
   try{
+    const sig = req.headers['stripe-signature'];
+    const endpointSecret: string | undefined = isTestingModeEnabled===true ? process.env.STRIPE_WEBHOOK_TEST_SIGNING_SECRET : process.env.STRIPE_WEBHOOK_SIGNING_SECRET;
+    //catch any errors that occur when constructing the webhook event (such as wrong body format, too many characters etc...)
+    const event:any = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret); //req.rawBody is assigned through middleware in server.js
+    if (!event || !event.data) throw new Error('No event data was found! This route requires this.');
+
     //ensure the event is the correct type
     switch(event.type){
       case 'checkout.session.completed':
         if (event.data.object.mode==='subscription'){
           await handleSubscriptionCreated(event,res);
         }else if (event.data.object.mode==='payment'){
-          await handleOrderPayment(event,res);
+          const isProcessed = await handleOrderPayment(event,res);
+          //handle the event where the order where order wasnt fully processed
+          if (isProcessed!==true) throw new Error('Order was not processed!');
+          //we can assume the order was processed
+          res.status(HttpStatusCodes.OK).json({});
         }else{
           throw new Error(`Error mode not handled ${event.data.object.mode}`);
         };
