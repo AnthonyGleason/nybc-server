@@ -23,14 +23,14 @@ export const handleOrderPayment = async function(event:any,res:any){
   //get required properties to create the order doc from the payment intent
   const userID:string = checkoutSessionCompleted.metadata.userID;
   const shippingAddress:Address = {
-    line1: checkoutSessionCompleted.customer_details.address.line1,
-    line2: checkoutSessionCompleted.customer_details.address.line2 || undefined,
-    city: checkoutSessionCompleted.customer_details.address.city,
-    state: checkoutSessionCompleted.customer_details.address.state,
-    postal_code: checkoutSessionCompleted.customer_details.address.postal_code,
-    country: checkoutSessionCompleted.customer_details.address.country,
+    line1: checkoutSessionCompleted.shipping_details.address.line1,
+    line2: checkoutSessionCompleted.shipping_details.address.line2 || undefined,
+    city: checkoutSessionCompleted.shipping_details.address.city,
+    state: checkoutSessionCompleted.shipping_details.address.state,
+    postal_code: checkoutSessionCompleted.shipping_details.address.postal_code,
+    country: checkoutSessionCompleted.shipping_details.address.country,
     phone: checkoutSessionCompleted.customer_details.phone,
-    fullName: checkoutSessionCompleted.customer_details.name
+    fullName: checkoutSessionCompleted.shipping_details.name
   }; 
   const giftMessage:string = checkoutSessionCompleted.metadata.giftMessage || '';
   const pendingOrderDocID:string = checkoutSessionCompleted.metadata.pendingOrderID;
