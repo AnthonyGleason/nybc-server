@@ -7,32 +7,19 @@ import { handleSubscriptionCreated, handleSubscriptionDeleted, handleSubscriptio
 
 const membershipsRouter = Router();
 
-membershipsRouter.post('/stripe-webhook-subscriptions',(req:any,res,next)=>{
-  try {
-    const sig = req.headers['stripe-signature'];
-    const endpointSecret: string | undefined = isTestingModeEnabled===true ? process.env.STRIPE_WEBHOOK_TEST_SIGNING_SECRET : process.env.STRIPE_WEBHOOK_SUBSCRIPTIONS_SECRET;
-    //catch any errors that occur when constructing the webhook event (such as wrong body format, too many characters etc...)
-    const event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret); //req.rawBody is assigned through middleware in server.js
-    switch(event.type){
-      case 'customer.subscription.updated':
-        try{
-          //the below line prevents stripe from sending new subscriptions to this handler
-          //by checking for a userID we ensure that the checkout.session.completed was successfully run on first launch
-          if (!event.data.object.metadata.userID) throw new Error('The metadata is missing a userID');
-          if (event.data.object.object==='subscription') handleSubscriptionUpdated(event,res);
-        }catch(err){
-          handleError(res,HttpStatusCodes.BAD_REQUEST,err);
-        };
-        break;
-      case 'customer.subscription.deleted':
-        handleSubscriptionDeleted(event,res);
-        break;
-      default:
-        console.log('This route does not support the event, '+event.type);
-        throw new Error('This route does not support the event, '+event.type);
-    };
-  } catch (err) {
-    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
+membershipsRouter.get('/pricingTableKeys',(req:any,res,next)=>{
+  if (isTestingModeEnabled){
+    //testing mode ENABLED
+    res.status(200).json({
+      'pricingTableID': "prctbl_1OMjA2J42zMuNqyLawMzujZ1",
+      'publishableKey': "pk_test_51MkbRQJ42zMuNqyLhOP6Aluvz4TVAxVFFeofdem3PAvRDUoRzwYxfm0tBeOKYhdCNhbIzSSKeVFdrp7IvVku60Yz001xBUoHhk"
+    });
+  }else{
+    //LIVE MODE
+    res.status(200).json({
+      'pricingTableID': "prctbl_1OMet3J42zMuNqyLNo0BiWpN",
+      'publishableKey': "pk_live_51MkbRQJ42zMuNqyLM3bL3QNb9f320fNzmvx0T9nbBUd9GKiKUSiX4zBcPy0DQ0TN303aWOckXd4bq2COmaaBerjM003vesDiuL"
+    });
   };
 });
 export default membershipsRouter;

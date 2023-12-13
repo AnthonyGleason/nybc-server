@@ -15,34 +15,43 @@ import { getCustomOrderMailOptions, getOrderPlacedMailOptions } from '@src/const
 import { transporter } from "@src/server";
 import { getSelectionName, handleOrderPayment } from '@src/helpers/shop';
 import { isTestingModeEnabled, redirectSuccessfulCheckoutsToLocalhost } from '@src/config/config';
-import { handleSubscriptionCreated } from '@src/helpers/memberships';
+import { handleSubscriptionCreated, handleSubscriptionDeleted, handleSubscriptionUpdated } from '@src/helpers/memberships';
 
 export const shopRouter = Router();
 
 // relevant documentation for the below webhook route, https://dashboard.stripe.com/webhooks/create?endpoint_location=local
-shopRouter.post('/stripe-webhook-checkout-session-success', async(req:any,res,next)=>{
-  try {
-    const sig = req.headers['stripe-signature'];
-    const endpointSecret: string | undefined = isTestingModeEnabled===true ? process.env.STRIPE_WEBHOOK_TEST_SIGNING_SECRET : process.env.STRIPE_WEBHOOK_SIGNING_SECRET;
-    //catch any errors that occur when constructing the webhook event (such as wrong body format, too many characters etc...)
-    const event:any = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret); //req.rawBody is assigned through middleware in server.js
-    if (!event || !event.data) throw new Error('No event data was found! This route requires this.');
+shopRouter.post('/stripe-webhook-listener', async(req:any,res,next)=>{
+  const sig = req.headers['stripe-signature'];
+  const endpointSecret: string | undefined = isTestingModeEnabled===true ? process.env.STRIPE_WEBHOOK_TEST_SIGNING_SECRET : process.env.STRIPE_WEBHOOK_SIGNING_SECRET;
+  //catch any errors that occur when constructing the webhook event (such as wrong body format, too many characters etc...)
+  const event:any = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret); //req.rawBody is assigned through middleware in server.js
+  if (!event || !event.data) throw new Error('No event data was found! This route requires this.');
+  try{
     //ensure the event is the correct type
-    if (event.type!=='checkout.session.completed') throw new Error('This route only handles checkout session succeess payments right now.');
-    try{
-      if (event.data.object.mode==='subscription'){
-        await handleSubscriptionCreated(event,res);
-        res.status(HttpStatusCodes.OK);
-      }else if(event.data.object.mode==='payment'){
-        await handleOrderPayment(event,res);
-        res.status(HttpStatusCodes.OK);
-      }else{
-        throw new Error('This only handles subscriptions at the moment.');
-      };
-    }catch(err){
-      handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
+    switch(event.type){
+      case 'checkout.session.completed':
+        if (event.data.object.mode==='subscription'){
+          await handleSubscriptionCreated(event,res);
+        }else if (event.data.object.mode==='payment'){
+          await handleOrderPayment(event,res);
+        }else{
+          throw new Error(`Error mode not handled ${event.data.object.mode}`);
+        };
+        break;
+      case 'customer.subscription.updated':
+        //the below line prevents stripe from sending new subscriptions to this handler
+        //by checking for a userID we ensure that the checkout.session.completed was successfully run on first launch
+        if (!event.data.object.metadata.userID) throw new Error('The metadata is missing a userID'); //DO NOT DELETE THIS!!!!!!!!!!!!!
+        if (event.data.object.object==='subscription') handleSubscriptionUpdated(event,res);
+        break;
+      case 'customer.subscription.deleted':
+        handleSubscriptionDeleted(event,res);
+        break;
+      default:
+        console.log('This route does not support the event, '+event.type);
+        throw new Error('This route does not support the event, '+event.type);
     };
-  } catch (err) {
+  }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
 });
