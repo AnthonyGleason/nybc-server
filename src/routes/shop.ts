@@ -30,32 +30,34 @@ shopRouter.post('/stripe-webhook-listener', async(req:any,res,next)=>{
 
     //ensure the event is the correct type
     switch(event.type){
+
       case 'checkout.session.completed':
-        if (event.data.object.mode==='subscription'){
-          await handleSubscriptionCreated(event,res);
-        }else if (event.data.object.mode==='payment'){
-          const isProcessed = await handleOrderPayment(event,res);
-          //handle the event where the order where order wasnt fully processed
-          if (isProcessed!==true) throw new Error('Order was not processed!');
-          //we can assume the order was processed
-          res.status(HttpStatusCodes.OK).json({});
-        }else{
-          throw new Error(`Error mode not handled ${event.data.object.mode}`);
+        switch (event.data.object.mode) {
+          case 'subscription':
+            await handleSubscriptionCreated(event, res);
+            break;
+
+          case 'payment':
+            await handleOrderPayment(event, res);
+            break;
+
+          default:
+            throw new Error(`Unhandled mode: ${event.data.object.mode}`);
         };
         break;
+
       case 'customer.subscription.updated':
-        //the below line prevents stripe from sending new subscriptions to this handler
-        //by checking for a userID we ensure that the checkout.session.completed was successfully run on first launch
-        if (!event.data.object.metadata.userID) throw new Error('The metadata is missing a userID'); //DO NOT DELETE THIS!!!!!!!!!!!!!
-        if (event.data.object.object==='subscription') handleSubscriptionUpdated(event,res);
+        await handleSubscriptionUpdated(event,res);
         break;
+
       case 'customer.subscription.deleted':
-        handleSubscriptionDeleted(event,res);
+        await handleSubscriptionDeleted(event,res)
         break;
+
       default:
-        console.log('This route does not support the event, '+event.type);
         throw new Error('This route does not support the event, '+event.type);
     };
+    res.status(HttpStatusCodes.OK).send();
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
