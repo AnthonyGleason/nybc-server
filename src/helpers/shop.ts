@@ -1,4 +1,4 @@
-import { Address, CartItem, Order, PendingOrder, User } from "@src/interfaces/interfaces";
+import { Address, CartInterface, CartItem, Order, PendingOrder, Product, User } from "@src/interfaces/interfaces";
 import { handleError } from "./error";
 import { getPendingOrderDocByDocID, updatePendingOrderDocByDocID } from "@src/controllers/pendingOrder";
 import Cart from "@src/classes/Cart";
@@ -8,6 +8,7 @@ import { getUserByID } from "@src/controllers/user";
 import { getOrderPlacedMailOptions } from "@src/constants/emails";
 import { transporter } from "@src/server";
 import jwt from 'jsonwebtoken';
+import { getItemByID } from "@src/controllers/item";
 
 export const getSelectionName = function(cartItem:CartItem){
   if (cartItem.itemData.cat==='bagel' && cartItem.selection==='six') return 'Six Pack(s)';
@@ -119,3 +120,56 @@ export const handleOrderPayment = async function(event:any,res:any){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
   };
 };
+
+export const verifyModifyClubCart = async function (
+  selection: string,
+  itemID: string,
+  updatedQuantity: number,
+  cart: CartInterface
+): Promise<boolean> {
+  // Calculate bagel and spread totals
+  let bagelNewTotalQuantity: number = 0;
+  let spreadNewTotalQuantity: number = 0;
+
+  // Flag to check if a spread is already in the cart
+  let hasSpreadInCart: boolean = false;
+
+  cart.items.forEach((item: CartItem) => {
+    switch (item.itemData.cat) {
+      case 'bagel':
+        // If this is the item being updated, replace the item quantity with the new item quantity
+        if (selection === 'two' && item.itemData._id.toString() === itemID.toString()) {
+          bagelNewTotalQuantity += updatedQuantity;
+        } else {
+          bagelNewTotalQuantity += item.quantity;
+        }
+        break;
+      case 'spread':
+        if (selection === 'halflb' && item.itemData._id.toString() === itemID.toString()) {
+          spreadNewTotalQuantity += updatedQuantity;
+        } else {
+          spreadNewTotalQuantity += item.quantity;
+          // Set the flag to true if a spread is found in the cart
+          hasSpreadInCart = true;
+        }
+        break;
+    }
+  });
+
+  // Get item by ID
+  const itemDoc: Product | null = await getItemByID(itemID.toString());
+  if (!itemDoc) return false;
+
+  // Verify if the item can be added or removed
+  if (itemDoc.cat === 'bagel' && bagelNewTotalQuantity <= 6) {
+    return true;
+  }
+
+  if (itemDoc.cat === 'spread' && spreadNewTotalQuantity <= 1 && !hasSpreadInCart) {
+    return true;
+  }
+
+  // If none of the conditions are met, return false
+  return false;
+};
+

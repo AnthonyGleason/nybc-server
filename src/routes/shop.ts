@@ -13,7 +13,7 @@ import { handleError } from '@src/helpers/error';
 import { createPendingOrderDoc, getPendingOrderDocByDocID, updatePendingOrderDocByDocID } from '@src/controllers/pendingOrder';
 import { getCustomOrderMailOptions, getOrderPlacedMailOptions } from '@src/constants/emails';
 import { transporter } from "@src/server";
-import { getSelectionName, handleOrderPayment } from '@src/helpers/shop';
+import { getSelectionName, handleOrderPayment, verifyModifyClubCart } from '@src/helpers/shop';
 import { isTestingModeEnabled, redirectSuccessfulCheckoutsToLocalhost } from '@src/config/config';
 import { handleSubscriptionCreated, handleSubscriptionDeleted, handleSubscriptionUpdated } from '@src/helpers/memberships';
 
@@ -296,6 +296,7 @@ shopRouter.get('/carts',authenticateCartToken,handleCartLoginAuth, async(req:any
 shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:any,res,next)=>{
   let userDoc:User | null = null;
   let membershipTier:string = 'Non-Member';
+  let isClubCart:boolean = req.body.isClubCart || false;
   //get cart from payload
   const cart:Cart = new Cart(
     req.payload.cartPayload.cart.items,
@@ -316,6 +317,18 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
     itemID: string;
     updatedQuantity: number;
   } = req.body;
+
+  //if it is a club cart make sure the item can be added
+  //we only allow 6 bagel types and 1 spread type
+  try{
+    if (isClubCart){
+      const isValidRequest:boolean = await verifyModifyClubCart(selection,itemID,updatedQuantity,cart);
+      console.log('isvalid', isValidRequest);
+      if (!isValidRequest) throw new Error('You cannot add any more of that item type to your cart.');
+    };
+  }catch(err){
+    handleError(res,HttpStatusCodes.NOT_EXTENDED,err);
+  };
 
   try {
     // Check for missing or incorrect fields
