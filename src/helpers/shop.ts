@@ -100,7 +100,6 @@ export const handleOrderPayment = async function(event:any,res:any){
 
       //verify if this is a club order or not
       const isClubOrder:boolean = event.data.object.metadata.isClubOrder || false;
-  
       //verify order can be placed
       //get users membership doc
       let membershipDoc:Membership | null = await getMembershipByUserID(userID.toString());
@@ -110,6 +109,29 @@ export const handleOrderPayment = async function(event:any,res:any){
         //verify they have at least 1 order or more remaining
         //BUG WARNING must have isClubOrder check here or regular shop orders will deduct from users regular deliveries
         if (isClubOrder && membershipDoc && membershipDoc.deliveriesLeft<=0) throw new Error('The user is out of deliveries for this billing cycle.');
+        
+        //verify user has correct quantity in their cart
+        if (isClubOrder){
+          let spreadCount:number = 0;
+          let bagelCount:number = 0;
+          let mysteryCount:number = 0;
+          cart.items.forEach((cartItem:CartItem)=>{
+            switch(cartItem.itemData.cat){
+              case 'spread':
+                spreadCount+=cartItem.quantity;
+                break;
+              case 'bagel':
+                bagelCount+=cartItem.quantity;
+                break;
+              case 'mystery':
+                mysteryCount+=cartItem.quantity;
+                break;
+            }
+          });
+          if (mysteryCount!==1) throw new Error('The cart must have a mystery item quantity of 1');
+          if (bagelCount!==6) throw new Error('The cart must have a total of 6 "two packs".');
+          if (spreadCount!==1) throw new Error('The cart must have 1 half pound spread.');
+        };
       }catch(err){
         handleError(res,HttpStatusCodes.FORBIDDEN,err);
       };
@@ -121,7 +143,6 @@ export const handleOrderPayment = async function(event:any,res:any){
           cart.items[i].itemData.price=0;
         };
       };
-
       const orderDoc: Order = await createOrder(
         userID,
         cart,
