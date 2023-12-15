@@ -30,6 +30,10 @@ const OrderSchema = new mongoose.Schema({
   },
   giftMessage:{
     type: String,
+  },
+  isClubOrder:{
+    type:Boolean,
+    default: false
   }
 });
 

@@ -26,6 +26,10 @@ export interface PastryItem extends Product{
   price: number
 };
 
+export interface MysteryItem extends Product{
+  price: number
+};
+
 export interface CartItem{
   itemData: BagelItem | SpreadItem,
   selection?: string
@@ -69,7 +73,8 @@ export interface Order{
   cart:CartInterface,
   shippingAddress:Address,
   trackingNumberArr?:string[],
-  giftMessage?:string
+  giftMessage?:string,
+  isClubOrder:boolean,
   _id: string | mongoose.Types.ObjectId // unique id given by mongodb
 };
 
@@ -78,7 +83,7 @@ export interface Membership{
   expirationDate?: Date,
   tier: string,
   userID: string,
-  deliveriesLeft: number
+  deliveriesLeft: number,
   _id: string | mongoose.Types.ObjectId //unique id given by mongodb
 };
 

@@ -1,5 +1,5 @@
 import { getItemByID } from "@src/controllers/item";
-import { BagelItem, CartItem, PastryItem, Product, SpreadItem } from "@src/interfaces/interfaces";
+import { BagelItem, CartItem, MysteryItem, PastryItem, Product, SpreadItem } from "@src/interfaces/interfaces";
 
 export default class Cart{
   items:CartItem[];
@@ -188,6 +188,9 @@ export default class Cart{
         unitPrice = tempItemDoc.price;
       }else if(itemDoc.cat==='pastry'){
         const tempItemDoc:PastryItem = itemDoc as PastryItem;
+        unitPrice = tempItemDoc.price;
+      }else if(itemDoc.cat==='mystery'){
+        const tempItemDoc:MysteryItem = itemDoc as MysteryItem;
         unitPrice = tempItemDoc.price;
       }else{
         throw new Error('The requested selection is invalid.');

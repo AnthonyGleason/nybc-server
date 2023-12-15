@@ -3,7 +3,6 @@ import HttpStatusCodes from "@src/constants/HttpStatusCodes";
 import { handleError } from "@src/helpers/error";
 import { stripe } from "@src/util/stripe";
 import { Router } from "express";
-import { handleSubscriptionCreated, handleSubscriptionDeleted, handleSubscriptionUpdated} from '../helpers/memberships';
 import { getSelectionName } from "@src/helpers/shop";
 import { CartItem, Membership, PendingOrder } from "@src/interfaces/interfaces";
 import { issueCartJWTToken } from "@src/helpers/auth";

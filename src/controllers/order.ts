@@ -8,13 +8,15 @@ export const createOrder = async function(
   cart:CartInterface,
   shippingAddress:Address,
   giftMessage?:string,
+  isClubOrder?:boolean,
   ):Promise<Order>{
   return await OrderModel.create({
     userID: userID,
     cart:cart,
     shippingAddress:shippingAddress,
     giftMessage:giftMessage,
-    dateCreated: new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+    dateCreated: new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })),
+    isClubOrder: isClubOrder || false
   });
 };
 

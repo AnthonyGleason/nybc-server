@@ -244,11 +244,20 @@ shopRouter.get('/carts/verify',authenticateCartToken,(req:any,res,next)=>{
 });
 
 //create a cart and return the jwt token of the cart to the user
-shopRouter.post('/carts',(req,res,next)=>{
+shopRouter.post('/carts',async(req,res,next)=>{
   try{
     //create an empty cart
     const cart:Cart = new Cart();
     if (!cart) throw new Error('An error has occured when creating an empty cart.');
+    
+    const isClubCart:boolean = req.body.isClub;
+    if (isClubCart){
+      //MUST BE SET TO THE BAKERS CHOICE ITEM DOC ID
+      const BAKERS_CHOICE_ID:string = '657be979302c616093d309b1';
+      const itemDoc:Product | null = await getItemByID(BAKERS_CHOICE_ID);
+      if (!itemDoc) throw new Error('An item doc was not found for the brendels bakers choice.');
+      cart.handleModifyCart(itemDoc,1);
+    };
     
     //sign a token for the cart
     const token = issueCartJWTToken(cart);
@@ -256,6 +265,7 @@ shopRouter.post('/carts',(req,res,next)=>{
 
     res.status(HttpStatusCodes.OK).json({cartToken:token});
   }catch(err){
+    console.log(err);
     handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
 });
@@ -323,13 +333,12 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
   try{
     if (isClubCart){
       const isValidRequest:boolean = await verifyModifyClubCart(selection,itemID,updatedQuantity,cart);
-      console.log('isvalid', isValidRequest);
       if (!isValidRequest) throw new Error('You cannot add any more of that item type to your cart.');
     };
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_EXTENDED,err);
   };
-
+  
   try {
     // Check for missing or incorrect fields
     if (!itemID || typeof updatedQuantity !== 'number' || updatedQuantity<0) {
@@ -361,8 +370,8 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
     //get item data from mongoDB
     const itemDoc:Product | null = await getItemByID(itemID);
     if (!itemDoc) throw new Error('An error has occured when retrieving item data.');
-    
     try{
+      if (itemDoc.cat==='mystery') throw new Error('You cannot modify the brendels selection.');
       //handle invalid item quantity, if item quantity is less than 0 set it to 0
       if (updatedQuantity<0){
         cart.handleModifyCart(itemDoc,0,selection);
