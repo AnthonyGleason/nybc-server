@@ -377,10 +377,13 @@ shopRouter.post('/orders/custom',async(req:any,res,next)=>{
 });
 
 //get order by order id (users)
-shopRouter.get('/orders/:orderID', authenticateLoginToken, async (req:any,res,next)=>{
+shopRouter.post('/orders/:orderID', async (req:any,res,next)=>{
   const orderID:string = req.params.orderID;
-  const userID:string = req.payload.loginPayload.user._id;
   let orderDoc:Order | null = null;
+  if (!orderID) throw new Error('The request is missing an order ID.');
+
+  const userEmail:string = req.body.userEmail;
+  if (!userEmail) throw new Error('The request is missing an email.');
   
   try{
     orderDoc= await getOrderByOrderID(orderID);
@@ -391,8 +394,8 @@ shopRouter.get('/orders/:orderID', authenticateLoginToken, async (req:any,res,ne
 
   try{
     // verify user is authorized to access info
-    if (orderDoc && (userID !== orderDoc.userID)) throw new Error('You are not authorized to access this order info.');
-    res.status(HttpStatusCodes.OK).json({'orderDoc': orderDoc});
+    if (orderDoc && (userEmail !== orderDoc.shippingAddress.email)) throw new Error('You are not authorized to access this order info.');
+    res.status(HttpStatusCodes.OK).json({'orderData': orderDoc});
   }catch(err){
     handleError(res,HttpStatusCodes.UNAUTHORIZED,err);
   };
