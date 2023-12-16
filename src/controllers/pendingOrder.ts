@@ -21,6 +21,12 @@ export const getPendingOrderDocByDocID= async function(docID:string):Promise<Pen
   return await PendingOrderModel.findById(docID);
 };
 
+export const getPendingOrderDocByUserID= async function(userID:string):Promise<PendingOrder | null>{
+  return await PendingOrderModel.findOne({
+    userID: userID
+  });
+};
+
 export const updatePendingOrderDocByDocID = async function(docID:string, updatedPendingOrderDoc:PendingOrder):Promise<PendingOrder | null>{
   return await PendingOrderModel.findByIdAndUpdate(docID,updatedPendingOrderDoc, { new: true });
 };

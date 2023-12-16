@@ -13,7 +13,7 @@ import { handleError } from '@src/helpers/error';
 import { createPendingOrderDoc, getPendingOrderDocByDocID, updatePendingOrderDocByDocID } from '@src/controllers/pendingOrder';
 import { getCustomOrderMailOptions, getOrderPlacedMailOptions } from '@src/constants/emails';
 import { transporter } from "@src/server";
-import { getSelectionName, handleOrderPayment, verifyModifyClubCart } from '@src/helpers/shop';
+import { getSelectionName, handleCreateGuestCheckoutSession, handleCreateUserCheckoutSession, handleGuestOrderPayment, handleOrderPayment, validateDate, verifyModifyClubCart } from '@src/helpers/shop';
 import { isTestingModeEnabled, redirectSuccessfulCheckoutsToLocalhost } from '@src/config/config';
 import { handleSubscriptionCreated, handleSubscriptionDeleted, handleSubscriptionUpdated } from '@src/helpers/memberships';
 
@@ -38,7 +38,13 @@ shopRouter.post('/stripe-webhook-listener', async(req:any,res,next)=>{
             break;
 
           case 'payment':
-            await handleOrderPayment(event, res);
+            //either handleOrderPayment or handleGuestOrderPayment depending on in userid starts with guest
+            const userID:string = event.data.object.metadata.userID;
+            if (userID.substring(0,5)==='guest'){
+              await handleGuestOrderPayment(event, res);
+            }else{
+              await handleOrderPayment(event, res);
+            };
             break;
 
           default:
@@ -111,26 +117,23 @@ shopRouter.post('/carts/applyMembershipPricing', authenticateCartToken, handleCa
 });
 
 //used to get order data on checkout
-shopRouter.get('/orders/checkout/fetchPlacedOrder/:pendingOrderDocID',authenticateLoginToken,async(req:any,res,next)=>{
+shopRouter.get('/orders/checkout/fetchPlacedOrder/:pendingOrderDocID',async(req:any,res,next)=>{
   try{
     const pendingOrderDocID:string = req.params.pendingOrderDocID;
     if (!pendingOrderDocID) throw new Error('A pending order doc ID was not provided in the request.');
+
     try{
       const pendingOrderDoc: PendingOrder | null = await getPendingOrderDocByDocID(pendingOrderDocID.toString());
       if (!pendingOrderDoc) throw new Error('A pending order doc was not found for the provided pending order docID');
       if (!pendingOrderDoc.orderID) throw new Error('A pending order doc ID was not found.');
       const orderDoc:Order | null = await getOrderByOrderID(pendingOrderDoc.orderID);
       if (!orderDoc) throw new Error('An order doc was not found.');
+
       //verify user owns the pending order doc
-      try{
-        if (pendingOrderDoc.userID.toString()!==req.payload.loginPayload.user._id.toString()){
-          throw new Error('The user is not authorized to view this order.');
-        }else{
-          res.status(HttpStatusCodes.OK).json({orderData: orderDoc});
-        };
-      }catch(err){
-        handleError(res,HttpStatusCodes.UNAUTHORIZED,err);
-      };
+      res.status(HttpStatusCodes.OK).json({
+        orderNumber: orderDoc._id.toString(),
+        isGuest: pendingOrderDoc.userID.substring(0, 5) === 'guest'
+      });
     }catch(err){
       handleError(res,HttpStatusCodes.NOT_FOUND,err);
     };
@@ -139,102 +142,18 @@ shopRouter.get('/orders/checkout/fetchPlacedOrder/:pendingOrderDocID',authentica
   };
 });
 
-shopRouter.post('/carts/create-checkout-session',authenticateCartToken,authenticateLoginToken,async (req:any,res,next)=>{
-  let membershipTier:string = 'Non-Member';
-  let cart:Cart | null = null;
-  
+shopRouter.post('/carts/create-checkout-session',authenticateCartToken,handleCartLoginAuth,async (req:any,res,next)=>{
+  //verify ship date is valid
   try{
-    if (!req.payload.loginPayload || !req.payload.loginPayload.user || !req.payload.loginPayload.user._id) throw new Error('The required login payload was not provided.');
-    if (!req.body.shipDate || typeof req.body.shipDate === undefined || req.body.shipDate.toString() ==='undefined') throw new Error('A ship date was not provided.');
+    if (validateDate(req.body.shipDate)===false) throw new Error('The ship date requested is not a future wednesday or thursday.');
+    //is a guest checkout
+    if (!req.payload.loginPayload || !req.payload.loginPayload.user || !req.payload.loginPayload.user._id){
+      handleCreateGuestCheckoutSession(req,res);
+    }else{
+      handleCreateUserCheckoutSession(req,res);
+    };
   }catch(err){
     handleError(res,HttpStatusCodes.BAD_REQUEST,err);
-  };
-  try{
-    //get membership tier for user
-    const membershipDoc:Membership | null = await getMembershipByUserID(req.payload.loginPayload.user._id);
-    if (!membershipDoc) throw new Error('Membership data was not found for the current user.');
-    membershipTier = membershipDoc.tier;
-  }catch(err){
-    handleError(res,HttpStatusCodes.NOT_FOUND,err);
-  };
-  try{
-    cart = new Cart(
-      req.payload.cartPayload.cart.items,
-      req.payload.cartPayload.cart.subtotalInDollars,
-      req.payload.cartPayload.cart.taxInDollars,
-      req.payload.cartPayload.cart.discountAmountInDollars,
-      req.payload.cartPayload.cart.finalPriceInDollars || 0,
-      new Date(req.body.shipDate)
-    );
-    if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
-    
-    //cleanup cart
-    await cart.cleanupCart(membershipTier);
-  }catch(err){
-    handleError(res,HttpStatusCodes.BAD_REQUEST,err);
-  };
-  //sign new cart token so date is saved to cart
-  const updatedCartToken:string = issueCartJWTToken(cart);
-  //store the token temporarily because it is too long to be sent through stripe
-  const pendingOrderDoc:PendingOrder = await createPendingOrderDoc(updatedCartToken,req.payload.loginPayload.user._id);
-
-  try{
-    if (!pendingOrderDoc) throw new Error('A pending order doc was not found!');
-    if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
-    const giftMessage:string = req.body.giftMessage || '';
-    //create session
-    const session = await stripe.checkout.sessions.create({
-      automatic_tax:{
-        'enabled': true
-      },
-      metadata:{
-        'pendingOrderID': pendingOrderDoc._id.toString(),
-        'userID': req.payload.loginPayload.user._id.toString(),
-        'giftMessage': giftMessage
-      },
-      payment_method_types: [
-        'card',
-      ],
-      "phone_number_collection": {
-        "enabled": true
-      },
-      mode: "payment",
-      allow_promotion_codes: true,
-      shipping_address_collection:{
-        allowed_countries: ['US']
-      },
-      shipping_options: [
-        {
-          shipping_rate_data: {
-            type: 'fixed_amount',
-            fixed_amount: {
-              amount: 0,
-              currency: 'usd',
-            },
-            display_name: 'Free USPS Priority Mail Shipping',
-          },
-        }
-      ],
-      line_items: cart.items.map((item) => {
-        return {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `${item.itemData.name} ${getSelectionName(item)}`,
-            },
-            unit_amount: Math.ceil(item.unitPriceInDollars * 100), //round down to the nearest whole integer (stripe wont accept decimal prices)
-          },
-          quantity: item.quantity,
-        }
-      }),
-      success_url: redirectSuccessfulCheckoutsToLocalhost ? `http://localhost:3000/#/cart/checkout/success/${pendingOrderDoc._id.toString()}` : `https://www.nybagelsclub.com/#/cart/checkout/success/${pendingOrderDoc._id.toString()}`,
-      cancel_url: redirectSuccessfulCheckoutsToLocalhost ? 'http://localhost:3000/#/cart' : 'https://www.nybagelsclub.com/#/cart'
-    })
-    //verify a payment intent was successfully created
-    if (!session) throw new Error('An error occured when creating a session.');
-    res.status(HttpStatusCodes.OK).json({sessionUrl: session.url});
-  }catch(err){
-    handleError(res,HttpStatusCodes.INTERNAL_SERVER_ERROR,err);
   };
 });
 

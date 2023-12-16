@@ -9,14 +9,16 @@ export default class Cart{
   discountAmountInDollars:number;
   finalPriceInDollars:number;
   desiredShipDate:Date;
-
+  isGuest:boolean;
+  
   constructor(
     cartItems?:CartItem[],
     subtotalInDollars?:number,
     taxInDollars?:number,
     discountAmountInDollars?:number,
     finalPriceInDollars?:number,
-    desiredShipDate?:Date
+    desiredShipDate?:Date,
+    isGuest?:boolean
   ){
     this.items = cartItems || [];
     this.subtotalInDollars = subtotalInDollars || 0;
@@ -25,6 +27,7 @@ export default class Cart{
     this.discountAmountInDollars = discountAmountInDollars || 0;
     this.finalPriceInDollars = finalPriceInDollars || 0;
     this.desiredShipDate = desiredShipDate || new Date();
+    this.isGuest = isGuest || false;
   };
 
   calcTotalQuantity = ():number=>{

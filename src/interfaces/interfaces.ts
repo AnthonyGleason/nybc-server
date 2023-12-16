@@ -52,7 +52,8 @@ export interface Address{
   postal_code:string,
   country:string,
   phone: string,
-  fullName: string
+  fullName: string,
+  email:string
 };
 
 export interface CartInterface{
@@ -63,6 +64,7 @@ export interface CartInterface{
   discountAmountInDollars:number;
   finalPriceInDollars:number;
   desiredShipDate:Date;
+  isGuest:boolean;
 };
 
 //order
