@@ -76,9 +76,6 @@ export const handleCreateGuestCheckoutSession = async function(req:any,res:any){
         'userID': guestID,
         'giftMessage': giftMessage
       },
-      payment_method_types: [
-        'card',
-      ],
       "phone_number_collection": {
         "enabled": true
       },
@@ -174,9 +171,6 @@ export const handleCreateUserCheckoutSession = async function(req:any,res:any){
         'userID': req.payload.loginPayload.user._id.toString(),
         'giftMessage': giftMessage
       },
-      payment_method_types: [
-        'card',
-      ],
       "phone_number_collection": {
         "enabled": true
       },

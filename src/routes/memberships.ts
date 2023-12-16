@@ -97,9 +97,6 @@ membershipsRouter.post('/create-club-checkout-session',authenticateCartToken,aut
         'userID': req.payload.loginPayload.user._id.toString(),
         'isClubOrder': true
       },
-      payment_method_types: [
-        'card',
-      ],
       "phone_number_collection": {
         "enabled": true
       },
