@@ -540,13 +540,19 @@ export async function generateUniqueGuestUserID() {
 
 export const validateDate = function (date: string): boolean {
   const selectedDate = new Date(date);
+
+  // Format today's date with the "America/New_York" time zone
   const today = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
 
+  // Format selected date with the "America/New_York" time zone
+  const formattedSelectedDate = new Date(selectedDate.toLocaleString("en-US", { timeZone: "America/New_York" }));
+
   // Check if the day is either Wednesday or Thursday
-  const isWednesdayOrThursday = selectedDate.getDay() === 2 || selectedDate.getDay() === 3;
-  console.log(selectedDate.getTime(),new Date(today).getTime())
+  const isWednesdayOrThursday = formattedSelectedDate.getDay() === 2 || formattedSelectedDate.getDay() === 3;
+  console.log(formattedSelectedDate.getTime(), new Date(today).getTime());
+
   // Check if the selected date is today or in the future
-  const isFutureDate = selectedDate.getTime() > new Date(today).getTime();
+  const isFutureDate = formattedSelectedDate.getTime() > new Date(today).getTime();
 
   return isWednesdayOrThursday && isFutureDate;
 };
