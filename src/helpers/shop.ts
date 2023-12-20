@@ -549,7 +549,6 @@ export const validateDate = function (date: string): boolean {
 
   // Check if the day is either Wednesday or Thursday
   const isWednesdayOrThursday = formattedSelectedDate.getDay() === 2 || formattedSelectedDate.getDay() === 3;
-  console.log(formattedSelectedDate.getTime(), new Date(today).getTime());
 
   // Check if the selected date is today or in the future
   const isFutureDate = formattedSelectedDate.getTime() > new Date(today).getTime();
