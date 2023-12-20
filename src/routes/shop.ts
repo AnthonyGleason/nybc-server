@@ -145,7 +145,6 @@ shopRouter.get('/orders/checkout/fetchPlacedOrder/:pendingOrderDocID',async(req:
 shopRouter.post('/carts/create-checkout-session',authenticateCartToken,handleCartLoginAuth,async (req:any,res,next)=>{
   //verify ship date is valid
   try{
-    console.log('ship date',req.body.shipDate);
     if (validateDate(req.body.shipDate)===false) throw new Error('The ship date requested is not a future wednesday or thursday.');
     //is a guest checkout
     if (!req.payload.loginPayload || !req.payload.loginPayload.user || !req.payload.loginPayload.user._id){
