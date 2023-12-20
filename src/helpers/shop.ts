@@ -33,7 +33,6 @@ export const handleCreateGuestCheckoutSession = async function(req:any,res:any){
 
   let membershipTier:string = 'Non-Member';
   let cart:Cart | null = null;
-  console.log('ship date',req.body.shipDate);
   try{
     if (!req.body.shipDate || typeof req.body.shipDate === undefined || req.body.shipDate.toString() ==='undefined') throw new Error('A ship date was not provided.');
   }catch(err){
