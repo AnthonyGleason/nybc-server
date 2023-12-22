@@ -1,6 +1,6 @@
 import Cart from '@src/classes/Cart';
 import HttpStatusCodes from '@src/constants/HttpStatusCodes';
-import { getAllItems, getItemByID } from '@src/controllers/item';
+import { getAllBagelItems, getAllItems, getAllPastryItems, getItemByID } from '@src/controllers/item';
 import { invalidatedTokens, issueCartJWTToken} from '@src/helpers/auth';
 import { Router } from 'express'
 import { stripe } from '@src/util/stripe';
@@ -324,9 +324,18 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
 //get all shop items
 shopRouter.get('/all', async (req,res,next)=>{
   try{
-    const allItems:Product[] | null = await getAllItems();
-    if (!allItems || allItems.length===0) throw new Error('No shop items were found.');
-    res.status(HttpStatusCodes.OK).json({allItems:allItems});
+    const [bagelItems,pastryItems] = await Promise.all([
+      getAllBagelItems(),
+      getAllPastryItems()
+    ]);
+
+    if (!bagelItems || bagelItems.length===0) throw new Error('No bagel shop items were found.');
+    if (!pastryItems || pastryItems.length===0) throw new Error('No pastry shop items were found.');
+    
+    res.status(HttpStatusCodes.OK).json({
+      bagelItems,
+      pastryItems
+    });
   }catch(err){
     handleError(res,HttpStatusCodes.NOT_FOUND,err);
   };

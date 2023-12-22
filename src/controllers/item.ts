@@ -57,9 +57,16 @@ export const insertManyStoreItems = async function(
 };
 
 //get all items
-export const getAllItems = async function():Promise<Product[] | null>{
-  return await ItemModel.find({});
+export const getAllItems = async function(){
+  return await ItemModel.find({}).sort({ name: 1 });
 };
+export const getAllBagelItems = async function(){
+  return await ItemModel.find({cat: 'bagel'}).sort({ name: 1 });
+};
+export const getAllPastryItems = async function(){
+  return await ItemModel.find({cat: 'pastry'}).sort({ name: 1 });
+};
+
 //get item by identifier
 export const getItemByIdentifier = async function(identifier:string):Promise<Product | null>{
   return await ItemModel.findOne({identifier: identifier})
