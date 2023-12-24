@@ -19,7 +19,8 @@ export interface SpreadItem extends Product{
 //item
 export interface BagelItem extends Product{
   dozenPrice:number,
-  sixPrice:number
+  sixPrice:number,
+  twoPrice:number
 };
 
 export interface PastryItem extends Product{

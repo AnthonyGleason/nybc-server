@@ -16,7 +16,7 @@ import { issueCartJWTToken } from "./auth";
 
 export const getSelectionName = function(cartItem:CartItem){
   if (cartItem.itemData.cat==='bagel' && cartItem.selection==='six') return 'Six Pack(s)';
-  if (cartItem.itemData.cat==='bagel' && cartItem.selection==='dozen') return 'Dozen(s)';
+  if (cartItem.itemData.cat==='bagel' && cartItem.selection==='dozen') return "Baker's Dozen(s)";
   if (cartItem.itemData.cat==='bagel' && cartItem.selection==='two') return 'Two Pack(s)';
 
   //need to have this first because the current store items without category of spread show 
@@ -50,7 +50,7 @@ export const handleCreateGuestCheckoutSession = async function(req:any,res:any){
       true
     );
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
-    
+    if (cart.subtotalInDollars<=25) throw new Error('The cart value must be at least $25.');
     //cleanup cart
     await cart.cleanupCart(membershipTier);
   }catch(err){
@@ -146,6 +146,7 @@ export const handleCreateUserCheckoutSession = async function(req:any,res:any){
       new Date(req.body.shipDate)
     );
     if (!cart || cart.isCartEmpty()) throw new Error('You cannot proceed to checkout with an empty cart.');
+    if (cart.subtotalInDollars<=25) throw new Error('The cart value must be at least $25.');
     
     //cleanup cart
     await cart.cleanupCart(membershipTier);

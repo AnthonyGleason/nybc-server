@@ -14,6 +14,9 @@ const ItemSchema = new mongoose.Schema({
   dozenPrice:{
     type:Number,
   },
+  twoPrice:{
+    type:Number,
+  },
   cat:{
     type: String,
   }

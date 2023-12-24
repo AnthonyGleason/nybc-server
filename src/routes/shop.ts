@@ -143,6 +143,7 @@ shopRouter.get('/orders/checkout/fetchPlacedOrder/:pendingOrderDocID',async(req:
 });
 
 shopRouter.post('/carts/create-checkout-session',authenticateCartToken,handleCartLoginAuth,async (req:any,res,next)=>{
+
   //verify ship date is valid
   try{
     if (validateDate(req.body.shipDate)===false) throw new Error('The ship date requested is not a future wednesday or thursday.');
@@ -246,7 +247,6 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
     itemID: string;
     updatedQuantity: number;
   } = req.body;
-
   //if it is a club cart make sure the item can be added
   //we only allow 6 bagel types and 1 spread type
   try{
@@ -301,10 +301,9 @@ shopRouter.put('/carts',authenticateCartToken, handleCartLoginAuth,async (req:an
     }catch(err){
       handleError(res,HttpStatusCodes.NOT_MODIFIED,err);
     };
-    
     //cleanup cart
     await cart.cleanupCart(membershipTier);
-    
+
     //invalidate the old cart token
     invalidatedTokens.push(req.tokens);
 

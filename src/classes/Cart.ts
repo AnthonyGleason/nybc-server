@@ -83,7 +83,10 @@ export default class Cart{
           break;
       };
       //handle applying the discount based on the item type
-      if (cartItem.itemData.cat==='bagel' && cartItem.selection === 'six') {
+      if (cartItem.itemData.cat === 'bagel' && cartItem.selection==='two'){
+        const tempItemData:BagelItem = cartItem.itemData as BagelItem;
+        cartItem.unitPriceInDollars = tempItemData.twoPrice - (tempItemData.twoPrice * discountMultiplier);
+      }else if (cartItem.itemData.cat==='bagel' && cartItem.selection === 'six') {
         const tempItemData:BagelItem = cartItem.itemData as BagelItem;
         cartItem.unitPriceInDollars = tempItemData.sixPrice - (tempItemData.sixPrice * discountMultiplier);
       } else if (cartItem.itemData.cat === 'bagel' && cartItem.selection === 'dozen') {
@@ -107,6 +110,7 @@ export default class Cart{
     const tempMembershipTier = membershipTier || 'Non-Member';
     //perform cleanup and verification
     await this.verifyUnitPrices();
+    
     this.calcTotalQuantity();
     //reapply discounts to items
     this.applyMembershipPricing(tempMembershipTier);
@@ -143,9 +147,22 @@ export default class Cart{
     return foundIndex;
   };
 
+  getBagelUnitPrice = (selection:string,itemData:BagelItem):number=>{
+    switch(selection){
+      case 'two':
+        return itemData.twoPrice;
+      case 'six':
+        return itemData.sixPrice;
+      case 'dozen':
+        return itemData.dozenPrice;
+      default:
+        return itemData.dozenPrice;
+    };
+  };
+
   verifyUnitPrices = async () =>{
     const promises: Promise<Product | undefined>[] = this.items.map(async (cartItem) => {
-      if (cartItem.itemData.cat === 'bagel' && (cartItem.selection ==='six'||cartItem.selection==='dozen')) {
+      if (cartItem.itemData.cat === 'bagel' && (cartItem.selection==='two' || cartItem.selection ==='six'||cartItem.selection==='dozen')) {
         return getItemByID(cartItem.itemData._id) as Promise<BagelItem>;
       } else if (cartItem.itemData.cat === 'spread') {
         return getItemByID(cartItem.itemData._id) as Promise<SpreadItem>;
@@ -164,7 +181,7 @@ export default class Cart{
         if (itemData===undefined) return;
         if (cartItem.itemData.cat === 'bagel') {
           const tempItemData = itemData as BagelItem;
-          cartItem.unitPriceInDollars = (cartItem.selection === 'six' ? tempItemData.sixPrice : tempItemData.dozenPrice);
+          cartItem.unitPriceInDollars = this.getBagelUnitPrice(cartItem.selection || '',tempItemData);
         } else if (cartItem.itemData.cat === 'spread') {
           const tempItemData = itemData as SpreadItem;
           cartItem.unitPriceInDollars = tempItemData.price;
@@ -185,7 +202,7 @@ export default class Cart{
       let unitPrice:number = 0;
       if (itemDoc.cat==='bagel' && selection){
         const tempItemDoc:BagelItem = itemDoc as BagelItem;
-        unitPrice = (selection === 'six' ? tempItemDoc.sixPrice : tempItemDoc.dozenPrice);
+        unitPrice = this.getBagelUnitPrice(selection,tempItemDoc);
       }else if (itemDoc.cat==='spread'){
         const tempItemDoc:SpreadItem = itemDoc as SpreadItem;
         unitPrice = tempItemDoc.price;
